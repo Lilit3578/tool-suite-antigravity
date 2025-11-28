@@ -21,10 +21,22 @@ impl UsageMetrics {
 
     /// Record that a command was used
     pub fn record_usage(&self, command_id: &str) {
-        let mut counts = self.usage_counts.lock().unwrap();
+        let mut counts = match self.usage_counts.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("[UsageMetrics] Usage counts mutex poisoned, recovering...");
+                poisoned.into_inner()
+            }
+        };
         *counts.entry(command_id.to_string()).or_insert(0) += 1;
 
-        let mut last_used = self.last_used.lock().unwrap();
+        let mut last_used = match self.last_used.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("[UsageMetrics] Last used mutex poisoned, recovering...");
+                poisoned.into_inner()
+            }
+        };
         let now = chrono::Utc::now().timestamp();
         last_used.insert(command_id.to_string(), now);
 
@@ -33,25 +45,55 @@ impl UsageMetrics {
 
     /// Get usage count for a command
     pub fn get_usage_count(&self, command_id: &str) -> u32 {
-        let counts = self.usage_counts.lock().unwrap();
+        let counts = match self.usage_counts.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("[UsageMetrics] Usage counts mutex poisoned in get_usage_count(), recovering...");
+                poisoned.into_inner()
+            }
+        };
         *counts.get(command_id).unwrap_or(&0)
     }
 
     /// Get last used timestamp for a command
     pub fn get_last_used(&self, command_id: &str) -> Option<i64> {
-        let last_used = self.last_used.lock().unwrap();
+        let last_used = match self.last_used.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("[UsageMetrics] Last used mutex poisoned in get_last_used(), recovering...");
+                poisoned.into_inner()
+            }
+        };
         last_used.get(command_id).copied()
     }
 
     /// Get all usage data for serialization
     pub fn get_all_usage(&self) -> HashMap<String, u32> {
-        self.usage_counts.lock().unwrap().clone()
+        match self.usage_counts.lock() {
+            Ok(guard) => guard.clone(),
+            Err(poisoned) => {
+                eprintln!("[UsageMetrics] Usage counts mutex poisoned in get_all_usage(), recovering...");
+                poisoned.into_inner().clone()
+            }
+        }
     }
 
     /// Clear all usage data
     pub fn clear(&self) {
-        self.usage_counts.lock().unwrap().clear();
-        self.last_used.lock().unwrap().clear();
+        match self.usage_counts.lock() {
+            Ok(mut guard) => guard.clear(),
+            Err(poisoned) => {
+                eprintln!("[UsageMetrics] Usage counts mutex poisoned in clear(), recovering...");
+                poisoned.into_inner().clear();
+            }
+        }
+        match self.last_used.lock() {
+            Ok(mut guard) => guard.clear(),
+            Err(poisoned) => {
+                eprintln!("[UsageMetrics] Last used mutex poisoned in clear(), recovering...");
+                poisoned.into_inner().clear();
+            }
+        }
     }
 
     /// Clone for sharing across threads
@@ -108,8 +150,10 @@ pub fn rank_commands<T>(
         })
         .collect();
 
-    // Sort by score descending
-    scored_commands.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    // Sort by score descending (handle NaN/invalid comparisons gracefully)
+    scored_commands.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     // Return sorted commands
     scored_commands.into_iter().map(|(cmd, _)| cmd).collect()

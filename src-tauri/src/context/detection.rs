@@ -129,27 +129,30 @@ mod tests {
     fn test_detect_currency_usd_symbol() {
         let result = detect_currency("The price is $123.45");
         assert!(result.is_some());
-        let info = result.unwrap();
-        assert_eq!(info.currency_code, "USD");
-        assert!((info.amount - 123.45).abs() < 0.01);
+        if let Some(info) = result {
+            assert_eq!(info.currency_code, "USD");
+            assert!((info.amount - 123.45).abs() < 0.01);
+        }
     }
 
     #[test]
     fn test_detect_currency_eur_symbol() {
         let result = detect_currency("Cost: €50.00");
         assert!(result.is_some());
-        let info = result.unwrap();
-        assert_eq!(info.currency_code, "EUR");
-        assert!((info.amount - 50.0).abs() < 0.01);
+        if let Some(info) = result {
+            assert_eq!(info.currency_code, "EUR");
+            assert!((info.amount - 50.0).abs() < 0.01);
+        }
     }
 
     #[test]
     fn test_detect_currency_code() {
         let result = detect_currency("Total: 1000 JPY");
         assert!(result.is_some());
-        let info = result.unwrap();
-        assert_eq!(info.currency_code, "JPY");
-        assert!((info.amount - 1000.0).abs() < 0.01);
+        if let Some(info) = result {
+            assert_eq!(info.currency_code, "JPY");
+            assert!((info.amount - 1000.0).abs() < 0.01);
+        }
     }
 
     #[test]

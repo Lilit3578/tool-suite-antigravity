@@ -196,22 +196,68 @@
   box-sizing: border-box;
 }
 
+html,
 body,
 #root {
   background: transparent !important;
+  background-color: transparent !important;
   margin: 0;
   padding: 0;
   overflow: hidden;
+  /* Prevent flash of unstyled content */
+  opacity: 0;
+  transition: opacity 0.1s ease-in;
+}
+
+html.loaded, body.loaded, #root.loaded {
+  opacity: 1;
 }
 
 /* Transparent window styling for command palette */
+html.palette-window,
 body.palette-window,
-body.palette-window #root,
-html.palette-window {
+body.palette-window #root {
   background: transparent !important;
   background-color: transparent !important;
+  -webkit-app-region: no-drag;
 }
 
 body.palette-window {
   overflow: hidden;
+}
+
+/* Smooth scrolling for command list */
+[cmdk-list] {
+  scroll-behavior: smooth;
+  /* Ensure scrollbar is visible on macOS */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Custom scrollbar styling for macOS */
+[cmdk-list]::-webkit-scrollbar {
+  width: 8px;
+}
+
+[cmdk-list]::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[cmdk-list]::-webkit-scrollbar-thumb {
+  background: var(--ink-400);
+  border-radius: 4px;
+}
+
+[cmdk-list]::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-500);
+}
+
+/* Fix CommandItem hover/selection conflict */
+[cmdk-item][data-selected="true"] {
+  background-color: var(--ink-200) !important;
+  color: var(--ink-1000) !important;
+}
+
+[cmdk-item]:not([data-selected="true"]):hover {
+  background-color: var(--ink-200) !important;
+  color: var(--ink-1000) !important;
 }

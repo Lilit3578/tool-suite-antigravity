@@ -30,88 +30,167 @@ impl ClipboardMonitor {
         // Spawn background task
         tauri::async_runtime::spawn(async move {
             println!("[ClipboardMonitor] Started monitoring");
+            
+            let mut consecutive_errors = 0u32;
+            const MAX_CONSECUTIVE_ERRORS: u32 = 10;
+            const BASE_POLL_INTERVAL_MS: u64 = 500;
+            const MAX_POLL_INTERVAL_MS: u64 = 5000;
 
             loop {
-                // Check if monitoring is enabled
-                let is_enabled = *enabled.lock().unwrap();
+                // Check if monitoring is enabled (with mutex recovery)
+                let is_enabled = match enabled.lock() {
+                    Ok(guard) => *guard,
+                    Err(poisoned) => {
+                        eprintln!("[ClipboardMonitor] Mutex poisoned, recovering...");
+                        *poisoned.into_inner()
+                    }
+                };
                 if !is_enabled {
-                    tokio::time::sleep(Duration::from_millis(500)).await;
+                    tokio::time::sleep(Duration::from_millis(BASE_POLL_INTERVAL_MS)).await;
+                    consecutive_errors = 0; // Reset error count when disabled
                     continue;
                 }
 
-                // Read current clipboard content
-                match app.clipboard().read_text() {
+                // Calculate sleep interval based on clipboard read result
+                // This ensures backoff is properly applied
+                let sleep_interval = match app.clipboard().read_text() {
                     Ok(current_content) => {
+                        // Reset error counter on successful read
+                        consecutive_errors = 0;
+                        
                         if current_content.is_empty() {
                             // Skip empty clipboard
-                            tokio::time::sleep(Duration::from_millis(500)).await;
-                            continue;
-                        }
+                            BASE_POLL_INTERVAL_MS
+                        } else {
+                            // Check if content has changed (with mutex recovery)
+                            let mut last = match last_content.lock() {
+                                Ok(guard) => guard,
+                                Err(poisoned) => {
+                                    eprintln!("[ClipboardMonitor] Content mutex poisoned, recovering...");
+                                    poisoned.into_inner()
+                                }
+                            };
+                            let has_changed = match &*last {
+                                Some(prev) => prev != &current_content,
+                                None => true,
+                            };
 
-                        // Check if content has changed
-                        let mut last = last_content.lock().unwrap();
-                        let has_changed = match &*last {
-                            Some(prev) => prev != &current_content,
-                            None => true,
-                        };
+                            if has_changed {
+                                println!("[ClipboardMonitor] Detected clipboard change");
 
-                        if has_changed {
-                            println!("[ClipboardMonitor] Detected clipboard change");
+                                // Update last content
+                                *last = Some(current_content.clone());
+                                drop(last);
 
-                            // Update last content
-                            *last = Some(current_content.clone());
-                            drop(last);
+                                // Get the active app (source of the clipboard content)
+                                let source_app = crate::automation::get_active_app().ok();
+                                
+                                // Add to history
+                                let item = ClipboardItem::new_text(current_content, source_app);
+                                history.add_item(item);
 
-                            // Get the active app (source of the clipboard content)
-                            let source_app = crate::automation::get_active_app().ok();
-                            
-                            // Add to history
-                            let item = ClipboardItem::new_text(current_content, source_app);
-                            history.add_item(item);
-
-                            // Emit event to frontend
-                            if let Err(e) = app.emit("clipboard-changed", history.get_items()) {
-                                eprintln!("[ClipboardMonitor] Failed to emit event: {}", e);
+                                // Emit event to frontend
+                                if let Err(e) = app.emit("clipboard-changed", history.get_items()) {
+                                    eprintln!("[ClipboardMonitor] Failed to emit event: {}", e);
+                                }
                             }
+                            
+                            BASE_POLL_INTERVAL_MS
                         }
                     }
                     Err(e) => {
-                        eprintln!("[ClipboardMonitor] Failed to read clipboard: {}", e);
+                        consecutive_errors += 1;
+                        
+                        // Only log errors occasionally to avoid spam
+                        if consecutive_errors == 1 || consecutive_errors % 10 == 0 {
+                            eprintln!("[ClipboardMonitor] Failed to read clipboard (error #{}) : {}", consecutive_errors, e);
+                        }
+                        
+                        // Calculate backoff interval based on error count
+                        if consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
+                            if consecutive_errors == MAX_CONSECUTIVE_ERRORS {
+                                eprintln!("[ClipboardMonitor] ⚠️  Too many consecutive errors. Reducing polling frequency.");
+                            }
+                            
+                            // Exponential backoff up to MAX_POLL_INTERVAL_MS
+                            std::cmp::min(
+                                BASE_POLL_INTERVAL_MS * (2_u64.pow((consecutive_errors - MAX_CONSECUTIVE_ERRORS).min(4))),
+                                MAX_POLL_INTERVAL_MS
+                            )
+                        } else {
+                            BASE_POLL_INTERVAL_MS
+                        }
                     }
-                }
+                };
 
-                // Poll every 500ms
-                tokio::time::sleep(Duration::from_millis(500)).await;
+                // Single sleep point that respects backoff
+                tokio::time::sleep(Duration::from_millis(sleep_interval)).await;
             }
         });
     }
 
+
     /// Enable clipboard monitoring
     pub fn enable(&self) {
-        let mut enabled = self.enabled.lock().unwrap();
-        *enabled = true;
-        println!("[ClipboardMonitor] Enabled");
+        match self.enabled.lock() {
+            Ok(mut enabled) => {
+                *enabled = true;
+                println!("[ClipboardMonitor] Enabled");
+            }
+            Err(poisoned) => {
+                eprintln!("[ClipboardMonitor] Mutex poisoned in enable(), recovering...");
+                let mut guard = poisoned.into_inner();
+                *guard = true;
+                println!("[ClipboardMonitor] Enabled (after recovery)");
+            }
+        }
     }
 
     /// Disable clipboard monitoring
     pub fn disable(&self) {
-        let mut enabled = self.enabled.lock().unwrap();
-        *enabled = false;
-        println!("[ClipboardMonitor] Disabled");
+        match self.enabled.lock() {
+            Ok(mut enabled) => {
+                *enabled = false;
+                println!("[ClipboardMonitor] Disabled");
+            }
+            Err(poisoned) => {
+                eprintln!("[ClipboardMonitor] Mutex poisoned in disable(), recovering...");
+                let mut guard = poisoned.into_inner();
+                *guard = false;
+                println!("[ClipboardMonitor] Disabled (after recovery)");
+            }
+        }
     }
 
     /// Check if monitoring is enabled
     pub fn is_enabled(&self) -> bool {
-        *self.enabled.lock().unwrap()
+        match self.enabled.lock() {
+            Ok(enabled) => *enabled,
+            Err(poisoned) => {
+                eprintln!("[ClipboardMonitor] Mutex poisoned in is_enabled(), recovering...");
+                *poisoned.into_inner()
+            }
+        }
     }
 
     /// Toggle monitoring on/off
     pub fn toggle(&self) -> bool {
-        let mut enabled = self.enabled.lock().unwrap();
-        *enabled = !*enabled;
-        let new_state = *enabled;
-        println!("[ClipboardMonitor] Toggled to {}", new_state);
-        new_state
+        match self.enabled.lock() {
+            Ok(mut enabled) => {
+                *enabled = !*enabled;
+                let new_state = *enabled;
+                println!("[ClipboardMonitor] Toggled to {}", new_state);
+                new_state
+            }
+            Err(poisoned) => {
+                eprintln!("[ClipboardMonitor] Mutex poisoned in toggle(), recovering...");
+                let mut guard = poisoned.into_inner();
+                *guard = !*guard;
+                let new_state = *guard;
+                println!("[ClipboardMonitor] Toggled to {} (after recovery)", new_state);
+                new_state
+            }
+        }
     }
 
     /// Get a clone for sharing across threads

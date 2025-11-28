@@ -35,9 +35,19 @@ function App() {
       document.documentElement.classList.add("palette-window");
       document.body.classList.add("palette-window");
 
+      // Prevent flash by ensuring transparency is ready
+      requestAnimationFrame(() => {
+        document.documentElement.classList.add("loaded");
+        document.body.classList.add("loaded");
+        const root = document.getElementById("root");
+        if (root) root.classList.add("loaded");
+      });
+
       return () => {
-        document.documentElement.classList.remove("palette-window");
-        document.body.classList.remove("palette-window");
+        document.documentElement.classList.remove("palette-window", "loaded");
+        document.body.classList.remove("palette-window", "loaded");
+        const root = document.getElementById("root");
+        if (root) root.classList.remove("loaded");
       };
     }
   }, [currentWidget]);

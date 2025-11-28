@@ -95,8 +95,14 @@ impl ClipboardHistory {
 
     /// Add an item to the history
     pub fn add_item(&self, item: ClipboardItem) {
-        // Check skip flag
-        let mut skip = self.skip_next_add.lock().unwrap();
+        // Check skip flag (with mutex recovery)
+        let mut skip = match self.skip_next_add.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("[ClipboardHistory] Skip mutex poisoned, recovering...");
+                poisoned.into_inner()
+            }
+        };
         if *skip {
             println!("[ClipboardHistory] Skipping add due to skip_next_add flag");
             *skip = false;
@@ -104,7 +110,13 @@ impl ClipboardHistory {
         }
         drop(skip);
 
-        let mut items = self.items.lock().unwrap();
+        let mut items = match self.items.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("[ClipboardHistory] Items mutex poisoned, recovering...");
+                poisoned.into_inner()
+            }
+        };
 
         // Don't add duplicates (check if same content as most recent)
         if let Some(last) = items.first() {
@@ -127,39 +139,70 @@ impl ClipboardHistory {
 
     /// Get all clipboard items
     pub fn get_items(&self) -> Vec<ClipboardItem> {
-        self.items.lock().unwrap().clone()
+        match self.items.lock() {
+            Ok(guard) => guard.clone(),
+            Err(poisoned) => {
+                eprintln!("[ClipboardHistory] Items mutex poisoned in get_items(), recovering...");
+                poisoned.into_inner().clone()
+            }
+        }
     }
 
     /// Get a specific item by index (0 = most recent)
     pub fn get_item(&self, index: usize) -> Option<ClipboardItem> {
-        self.items.lock().unwrap().get(index).cloned()
+        match self.items.lock() {
+            Ok(guard) => guard.get(index).cloned(),
+            Err(poisoned) => {
+                eprintln!("[ClipboardHistory] Items mutex poisoned in get_item(), recovering...");
+                poisoned.into_inner().get(index).cloned()
+            }
+        }
     }
 
     /// Get a specific item by ID
     pub fn get_item_by_id(&self, id: &str) -> Option<ClipboardItem> {
-        self.items
-            .lock()
-            .unwrap()
-            .iter()
-            .find(|item| item.id == id)
-            .cloned()
+        match self.items.lock() {
+            Ok(guard) => guard.iter().find(|item| item.id == id).cloned(),
+            Err(poisoned) => {
+                eprintln!("[ClipboardHistory] Items mutex poisoned in get_item_by_id(), recovering...");
+                poisoned.into_inner().iter().find(|item| item.id == id).cloned()
+            }
+        }
     }
 
     /// Clear all history
     pub fn clear(&self) {
-        let mut items = self.items.lock().unwrap();
+        let mut items = match self.items.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("[ClipboardHistory] Items mutex poisoned in clear(), recovering...");
+                poisoned.into_inner()
+            }
+        };
         items.clear();
         println!("[ClipboardHistory] Cleared all items");
     }
 
     /// Get the count of items
     pub fn count(&self) -> usize {
-        self.items.lock().unwrap().len()
+        match self.items.lock() {
+            Ok(guard) => guard.len(),
+            Err(poisoned) => {
+                eprintln!("[ClipboardHistory] Items mutex poisoned in count(), recovering...");
+                poisoned.into_inner().len()
+            }
+        }
     }
 
     /// Set the skip_next_add flag (used for auto-paste to prevent re-adding)
     pub fn set_skip_next_add(&self, skip: bool) {
-        let mut flag = self.skip_next_add.lock().unwrap();
+        let mut flag = match self.skip_next_add.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("[ClipboardHistory] Skip mutex poisoned in set_skip_next_add(), recovering...");
+                poisoned.into_inner()
+            }
+        };
         *flag = skip;
         println!("[ClipboardHistory] Set skip_next_add to {}", skip);
     }

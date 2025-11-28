@@ -2,9 +2,39 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": [
+    "main",
+    "*"
+  ],
   "permissions": [
     "core:default",
-    "opener:default"
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-decorations",
+    "core:window:allow-set-skip-taskbar",
+    "core:window:allow-set-ignore-cursor-events",
+    "core:window:allow-center",
+    "core:window:allow-create",
+    "core:window:allow-get-all-windows",
+    "core:window:allow-current-monitor",
+    "core:window:allow-available-monitors",
+    "core:window:allow-cursor-position",
+    "core:webview:allow-webview-position",
+    "core:webview:allow-webview-size",
+    "opener:default",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-is-registered",
+    "store:allow-get",
+    "store:allow-set",
+    "store:allow-save",
+    "store:allow-load"
   ]
 }

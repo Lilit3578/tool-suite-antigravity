@@ -55,13 +55,42 @@ CommandInput.displayName = CommandPrimitive.Input.displayName
 const CommandList = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.List>
->(({ className, ...props }, ref) => (
-  <CommandPrimitive.List
-    ref={ref}
-    className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden", className)}
-    {...props}
-  />
-))
+>(({ className, ...props }, ref) => {
+  const listRef = React.useRef<HTMLDivElement>(null);
+
+  // Auto-scroll selected item into view
+  React.useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Let cmdk handle arrow keys, but ensure scrolling
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        requestAnimationFrame(() => {
+          const selected = list.querySelector('[data-selected="true"]');
+          if (selected) {
+            selected.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          }
+        });
+      }
+    };
+
+    list.addEventListener("keydown", handleKeyDown);
+    return () => list.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  return (
+    <CommandPrimitive.List
+      ref={(node) => {
+        listRef.current = node;
+        if (typeof ref === "function") ref(node);
+        else if (ref) ref.current = node;
+      }}
+      className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden", className)}
+      {...props}
+    />
+  );
+})
 
 CommandList.displayName = CommandPrimitive.List.displayName
 
@@ -110,25 +139,22 @@ const CommandItem = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Item>
 >(({ className, ...props }, ref) => {
-  const [isHovered, setIsHovered] = React.useState(false);
-
   return (
     <CommandPrimitive.Item
       ref={ref}
       className={cn(
-        "relative flex cursor-default gap-3 select-none items-center rounded-lg px-4 py-1 font-light outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-ink-800",
+        "relative flex cursor-default gap-3 select-none items-center rounded-lg px-4 py-1 font-light outline-none",
+        "data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50",
+        "data-[selected=true]:bg-ink-200 data-[selected=true]:text-ink-1000",
+        "hover:bg-ink-200 hover:text-ink-1000",
+        "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-ink-800",
         className
       )}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      style={{
-        backgroundColor: isHovered ? 'var(--ink-200)' : 'transparent',
-        color: isHovered ? 'var(--ink-1000)' : 'inherit'
-      }}
       {...props}
     />
   );
 })
+
 
 CommandItem.displayName = CommandPrimitive.Item.displayName
 

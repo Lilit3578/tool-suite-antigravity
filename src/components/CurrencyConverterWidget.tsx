@@ -171,7 +171,7 @@ export function CurrencyConverterWidget() {
     return (
         <Card
             ref={containerRef}
-            className="w-full bg-ink-0 border border-ink-400 rounded-xl p-4 flex flex-col gap-2"
+            className="w-full bg-white border border-ink-400 rounded-xl p-4 flex flex-col gap-2"
         >
             {/* Header */}
             <div className="flex items-center gap-2">

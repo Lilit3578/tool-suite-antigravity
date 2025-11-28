@@ -22,8 +22,11 @@ pub async fn capture_selection(app: tauri::AppHandle, mode: Option<String>) -> R
         
         // Restore focus to the original app so we can capture the selection
         if let Err(e) = automation::restore_focus(&target_app) {
-            eprintln!("Failed to restore focus to {}: {}", target_app, e);
+            eprintln!("[CaptureSelection] Failed to restore focus to {}: {}", target_app, e);
+            eprintln!("[CaptureSelection] Continuing anyway - operation might still work");
             // Continue anyway - might still work
+        } else {
+            println!("[CaptureSelection] Successfully restored focus to {}", target_app);
         }
         
         // Wait a bit for focus to restore
@@ -31,7 +34,10 @@ pub async fn capture_selection(app: tauri::AppHandle, mode: Option<String>) -> R
         
         // Simulate Cmd+C to copy selection to clipboard
         if let Err(e) = automation::simulate_cmd_c() {
-            eprintln!("Failed to simulate Cmd+C: {}", e);
+            eprintln!("[CaptureSelection] Failed to simulate Cmd+C: {}", e);
+            eprintln!("[CaptureSelection] This may indicate missing accessibility permissions");
+        } else {
+            println!("[CaptureSelection] Successfully simulated Cmd+C");
         }
         
         // Wait a bit for clipboard to update
@@ -40,9 +46,12 @@ pub async fn capture_selection(app: tauri::AppHandle, mode: Option<String>) -> R
         // Read from clipboard
         match app.clipboard().read_text() {
             Ok(text) => {
+                println!("[CaptureSelection] Successfully read {} bytes from clipboard", text.len());
                 // Restore focus back to our app (palette window if it exists)
                 if let Some(palette_window) = app.get_webview_window("palette-window") {
-                    let _ = palette_window.set_focus();
+                    if let Err(e) = palette_window.set_focus() {
+                        eprintln!("[CaptureSelection] Failed to restore focus to palette window: {}", e);
+                    }
                 }
                 
                 Ok(CaptureResult {
@@ -51,10 +60,13 @@ pub async fn capture_selection(app: tauri::AppHandle, mode: Option<String>) -> R
                 })
             }
             Err(e) => {
-                eprintln!("Failed to read clipboard after Cmd+C: {}", e);
+                eprintln!("[CaptureSelection] Failed to read clipboard after Cmd+C: {}", e);
+                eprintln!("[CaptureSelection] Returning empty result");
                 // Restore focus back
                 if let Some(palette_window) = app.get_webview_window("palette-window") {
-                    let _ = palette_window.set_focus();
+                    if let Err(e) = palette_window.set_focus() {
+                        eprintln!("[CaptureSelection] Failed to restore focus to palette window: {}", e);
+                    }
                 }
                 Ok(CaptureResult {
                     text: String::new(),
@@ -658,6 +670,7 @@ pub fn get_clipboard_history(history: tauri::State<ClipboardHistory>) -> Result<
 pub async fn paste_clipboard_item(
     app: tauri::AppHandle,
     history: tauri::State<'_, ClipboardHistory>,
+    last_active_app: tauri::State<'_, std::sync::Arc<std::sync::Mutex<Option<String>>>>,
     item_id: String,
 ) -> Result<(), String> {
     // Get the clipboard item
@@ -675,11 +688,26 @@ pub async fn paste_clipboard_item(
         .write_text(item.content.clone())
         .map_err(|e| format!("Failed to write to clipboard: {}", e))?;
 
-    // Use the source app from the clipboard item, or fallback to current active app
-    let target_app = if let Some(source) = &item.source_app {
-        source.clone()
-    } else {
-        automation::get_active_app().unwrap_or_else(|_| "Finder".to_string())
+    // Use the STORED last active app, or fallback to item source, or current active app
+    let target_app = {
+        let last_app_guard = match last_active_app.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("[PasteItem] Mutex poisoned, recovering...");
+                poisoned.into_inner()
+            }
+        };
+        if let Some(app_name) = last_app_guard.as_ref() {
+            println!("[PasteItem] Using stored last active app: {}", app_name);
+            app_name.clone()
+        } else if let Some(source) = &item.source_app {
+            println!("[PasteItem] Using item source app: {}", source);
+            source.clone()
+        } else {
+            let fallback = automation::get_active_app().unwrap_or_else(|_| "Finder".to_string());
+            println!("[PasteItem] Using fallback app: {}", fallback);
+            fallback
+        }
     };
 
     println!("[PasteItem] Target app: {}", target_app);
@@ -698,13 +726,24 @@ pub async fn paste_clipboard_item(
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Restore focus and paste (80-150ms delay as per Electron spec)
-        if let Err(e) = automation::auto_paste_flow(&target_app, 120) {
-            eprintln!("[PasteItem] Auto-paste failed: {}", e);
+        match automation::auto_paste_flow(&target_app, 120) {
+            Ok(_) => {
+                println!("[PasteItem] ✅ Successfully pasted to application: {}", target_app);
+            }
+            Err(e) => {
+                eprintln!("[PasteItem] ❌ Auto-paste failed: {}", e);
+                eprintln!("[PasteItem] Target app: {}", target_app);
+                eprintln!("[PasteItem] This may indicate:");
+                eprintln!("[PasteItem]   - Application '{}' is not running", target_app);
+                eprintln!("[PasteItem]   - Missing accessibility permissions");
+                eprintln!("[PasteItem]   - Circuit breaker triggered (too many failures)");
+            }
         }
     });
 
     Ok(())
 }
+
 
 #[tauri::command]
 pub fn clear_clipboard_history(history: tauri::State<ClipboardHistory>) -> Result<(), String> {

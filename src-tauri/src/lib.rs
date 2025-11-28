@@ -21,7 +21,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             // Load settings
-            let settings = settings::AppSettings::load()
+            let _settings = settings::AppSettings::load()
                 .unwrap_or_else(|e| {
                     eprintln!("Failed to load settings: {}", e);
                     settings::AppSettings::default()
@@ -34,10 +34,14 @@ pub fn run() {
             // Initialize usage metrics for intelligent ranking
             let usage_metrics = context::UsageMetrics::new();
             
+            // Initialize last active app tracker
+            let last_active_app = std::sync::Arc::new(std::sync::Mutex::new(None::<String>));
+            
             // Store in app state for access from commands
             app.manage(clipboard_history);
             app.manage(clipboard_monitor.clone_arc());
             app.manage(usage_metrics);
+            app.manage(last_active_app);
             
             // Start clipboard monitoring
             clipboard_monitor.start(app.handle().clone());
@@ -68,8 +72,10 @@ pub fn run() {
             )?;
 
             // Build tray icon
+            let default_icon = app.default_window_icon()
+                .ok_or("Failed to get default window icon")?;
             let _tray = TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(default_icon.clone())
                 .menu(&menu)
                 .on_menu_event(|app, event| {
                     match event.id().as_ref() {
@@ -117,7 +123,7 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // Register global shortcuts
+            // Register global shortcuts with retry logic
             let app_handle = app.handle().clone();
             
             // Parse and register command palette shortcut
@@ -133,38 +139,92 @@ pub fn run() {
                     }
                     
                     let handle = app_handle.clone();
-                    if let Err(e) = app.global_shortcut().on_shortcut(shortcut, move |app, _shortcut, _event| {
-                        // Capture selected text BEFORE opening the window (while original app still has focus)
-                        // Get the active app first
-                        let active_app = automation::get_active_app().ok();
+                    let last_app_state = app.state::<std::sync::Arc<std::sync::Mutex<Option<String>>>>();
+                    let last_app_clone = last_app_state.inner().clone();
+                    
+                    if let Err(e) = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, _event| {
+                        // Spawn async task to avoid blocking the shortcut handler
+                        let handle_clone = handle.clone();
+                        let last_app_clone = last_app_clone.clone();
                         
-                        // Simulate Cmd+C to copy selection to clipboard
-                        if let Err(e) = automation::simulate_cmd_c() {
-                            eprintln!("Failed to simulate Cmd+C in shortcut handler: {}", e);
-                        }
-                        
-                        // Small delay for clipboard to update
-                        std::thread::sleep(std::time::Duration::from_millis(100));
-                        
-                        // Now open the palette window
-                        if let Err(e) = show_widget_window(&handle, "palette") {
-                            eprintln!("Failed to show palette window: {}", e);
-                        } else {
-                            // Explicitly focus the palette window
-                            if let Some(window) = handle.get_webview_window("palette-window") {
-                                let _ = window.set_focus();
+                        tauri::async_runtime::spawn(async move {
+                            // Capture active app with proper error handling and mutex recovery
+                            match automation::get_active_app() {
+                                Ok(active_app) => {
+                                    match last_app_clone.lock() {
+                                        Ok(mut last_app) => {
+                                            *last_app = Some(active_app.clone());
+                                            println!("[Shortcut] Stored last active app: {}", active_app);
+                                        }
+                                        Err(poisoned) => {
+                                            eprintln!("[Shortcut] Mutex poisoned, recovering...");
+                                            let mut guard = poisoned.into_inner();
+                                            *guard = Some(active_app.clone());
+                                            println!("[Shortcut] Stored last active app: {} (after recovery)", active_app);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("[Shortcut] Failed to get active app: {}", e);
+                                    // Continue anyway - might still work
+                                }
                             }
-                        }
+                            
+                            // Simulate Cmd+C with permission check
+                            if let Err(e) = automation::simulate_cmd_c() {
+                                eprintln!("[Shortcut] Failed to simulate Cmd+C: {}", e);
+                                return; // Don't open palette if copy failed
+                            }
+                            
+                            // Async sleep instead of blocking
+                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                            
+                            // Open palette window
+                            if let Err(e) = show_widget_window(&handle_clone, "palette") {
+                                eprintln!("[Shortcut] Failed to show palette window: {}", e);
+                            } else {
+                                // Explicitly focus the palette window
+                                if let Some(window) = handle_clone.get_webview_window("palette-window") {
+                                    let _ = window.set_focus();
+                                }
+                            }
+                        });
                     }) {
                         eprintln!("Failed to set handler for command palette shortcut: {}", e);
-                    } else if let Err(e) = app.global_shortcut().register(shortcut) {
-                        eprintln!("Failed to register command palette shortcut: {}", e);
                     } else {
-                        println!("✅ Registered global shortcut: {}", shortcut_str);
+                        // Retry registration with exponential backoff
+                        let mut registered = false;
+                        let max_retries = 5;
+                        
+                        for attempt in 0..max_retries {
+                            match app.global_shortcut().register(shortcut) {
+                                Ok(_) => {
+                                    println!("✅ Registered global shortcut: {} (attempt {})", shortcut_str, attempt + 1);
+                                    registered = true;
+                                    break;
+                                }
+                                Err(e) => {
+                                    if attempt < max_retries - 1 {
+                                        let delay_ms = 100 * (2_u64.pow(attempt as u32)); // Exponential backoff: 100ms, 200ms, 400ms, 800ms
+                                        eprintln!("⚠️  Shortcut registration attempt {} failed: {}. Retrying in {}ms...", 
+                                            attempt + 1, e, delay_ms);
+                                        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+                                    } else {
+                                        eprintln!("❌ Failed to register command palette shortcut after {} attempts: {}", max_retries, e);
+                                        eprintln!("💡 Tip: Check System Settings > Keyboard > Keyboard Shortcuts for conflicts");
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if !registered {
+                            eprintln!("⚠️  App will continue without global shortcut. Use tray menu to access widgets.");
+                        }
                     }
                 }
                 Err(e) => eprintln!("Failed to parse command palette shortcut '{}': {}", shortcut_str, e),
             }
+
 
             println!("✅ Productivity Widgets initialized successfully!");
             println!("📋 Global Shortcut: Control+Shift+L");
@@ -197,7 +257,15 @@ pub fn run() {
             commands::show_widget,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .unwrap_or_else(|e| {
+            eprintln!("FATAL: Failed to start Tauri application: {}", e);
+            eprintln!("This is a critical error. Please check logs and system permissions.");
+            eprintln!("Common causes:");
+            eprintln!("  - Missing system permissions (accessibility, screen recording)");
+            eprintln!("  - Port conflicts or network issues");
+            eprintln!("  - Corrupted application state");
+            std::process::exit(1);
+        });
 }
 
 fn show_widget_window(app: &tauri::AppHandle, widget: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -222,24 +290,44 @@ fn show_widget_window(app: &tauri::AppHandle, widget: &str) -> Result<(), Box<dy
                 width: width as f64,
                 height: height as f64,
             }))?;
+            // Ensure window is hidden until transparency is ready
+            window.hide()?;
+            // Small delay to ensure transparency is applied
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            window.show()?;
+        } else {
+            window.show()?;
         }
-        window.show()?;
+        // Ensure focus is set (double-focus for palette to ensure it sticks)
         window.set_focus()?;
+        if widget == "palette" {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            window.set_focus()?;
+        }
         return Ok(());
     }
 
     // Create new window
     let is_resizable = widget != "palette"; // Palette is non-resizable
     
+    // Base builder with transparency for ALL windows initially
+    // For palette, start invisible to prevent flash, then show after transparency is ready
+    let start_visible = widget != "palette";
     let mut builder = WebviewWindowBuilder::new(app, &window_label, WebviewUrl::App(format!("index.html?widget={}", widget).into()))
         .title(title)
         .inner_size(width as f64, height as f64)
         .resizable(is_resizable)
         .focused(true)
         .always_on_top(true)
-        .visible(true)
-        .decorations(decorations)  // Use decorations from match
+        .visible(start_visible)
+        .transparent(true)  // All windows start transparent
+        .decorations(false)  // All windows start without decorations
         .skip_taskbar(true);  // Don't show in Dock/taskbar
+    
+    // Add decorations back for non-palette widgets
+    if widget != "palette" && decorations {
+        builder = builder.decorations(true).transparent(false);
+    }
     
     // Add size constraints for palette to prevent resizing
     if widget == "palette" {
@@ -361,16 +449,24 @@ fn show_widget_window(app: &tauri::AppHandle, widget: &str) -> Result<(), Box<dy
             // Fallback to center if cursor position unavailable
             builder = builder.center();
         }
-        
-        builder = builder
-            .transparent(true)
-            .decorations(false);
+        // Palette transparency already set in base builder
     } else {
         // Other widgets use center positioning
         builder = builder.center().decorations(decorations);
     }
     
     let window = builder.build()?;
+    
+    // For palette window, ensure transparency is ready before showing
+    if widget == "palette" {
+        // Small delay to ensure transparency is applied
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        window.show()?;
+        // Ensure focus is set (double-focus to ensure it sticks)
+        window.set_focus()?;
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        window.set_focus()?;
+    }
     
     // Add blur event listener for click-outside behavior (except palette)
     if widget != "palette" {
