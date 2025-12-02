@@ -1,9 +1,13 @@
 mod settings;
 mod types;
 mod commands;
+mod features;
 mod clipboard;
 mod automation;
 mod context;
+mod nswindow; // macOS native window configuration
+#[cfg(target_os = "macos")]
+mod panel; // Floating panel implementation
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -20,6 +24,17 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
+            // CRITICAL: Set app activation policy to Accessory FIRST
+            // This prevents space-switching when activating the app
+            #[cfg(target_os = "macos")]
+            {
+                if let Err(e) = nswindow::set_app_activation_policy_accessory() {
+                    eprintln!("⚠️  Failed to set Accessory mode: {}", e);
+                } else {
+                    println!("✅ App set to Accessory mode (no Dock icon, no space switching)");
+                }
+            }
+            
             // Load settings
             let _settings = settings::AppSettings::load()
                 .unwrap_or_else(|e| {
@@ -37,11 +52,20 @@ pub fn run() {
             // Initialize last active app tracker
             let last_active_app = std::sync::Arc::new(std::sync::Mutex::new(None::<String>));
             
+            // Initialize window operation lock to prevent race conditions
+            let window_lock = std::sync::Arc::new(tokio::sync::Mutex::new(()));
+            
+            // FIXED: Add debounce flag to prevent concurrent shortcut triggers
+            let shortcut_debounce = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            
             // Store in app state for access from commands
+            // CRITICAL: Must manage ALL state BEFORE accessing it in closures
             app.manage(clipboard_history);
             app.manage(clipboard_monitor.clone_arc());
             app.manage(usage_metrics);
             app.manage(last_active_app);
+            app.manage(window_lock);
+            app.manage(shortcut_debounce.clone());
             
             // Start clipboard monitoring
             clipboard_monitor.start(app.handle().clone());
@@ -83,14 +107,30 @@ pub fn run() {
                             app.exit(0);
                         }
                         "palette" => {
-                            if let Err(e) = show_widget_window(app, "palette") {
+                            // FIXED: Spawn async task instead of calling sync function
+                            let app_handle = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                if let Some(window_lock) = app_handle.try_state::<std::sync::Arc<tokio::sync::Mutex<()>>>() {
+                                    if let Err(e) = show_widget_window_async(&app_handle, "palette", false, window_lock.inner().clone()).await {
                                 eprintln!("Failed to show palette: {}", e);
                             }
+                                } else {
+                                    eprintln!("Window lock not available");
+                                }
+                            });
                         }
                         "clipboard" => {
-                            if let Err(e) = show_widget_window(app, "palette") {
+                            // FIXED: Spawn async task instead of calling sync function
+                            let app_handle = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                if let Some(window_lock) = app_handle.try_state::<std::sync::Arc<tokio::sync::Mutex<()>>>() {
+                                    if let Err(e) = show_widget_window_async(&app_handle, "palette", false, window_lock.inner().clone()).await {
                                 eprintln!("Failed to show clipboard history: {}", e);
                             }
+                                } else {
+                                    eprintln!("Window lock not available");
+                                }
+                            });
                         }
                         "toggle_monitor" => {
                             if let Some(monitor) = app.try_state::<clipboard::ClipboardMonitor>() {
@@ -109,9 +149,17 @@ pub fn run() {
                             }
                         }
                         "settings" => {
-                            if let Err(e) = show_widget_window(app, "settings") {
+                            // FIXED: Spawn async task instead of calling sync function
+                            let app_handle = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                if let Some(window_lock) = app_handle.try_state::<std::sync::Arc<tokio::sync::Mutex<()>>>() {
+                                    if let Err(e) = show_widget_window_async(&app_handle, "settings", false, window_lock.inner().clone()).await {
                                 eprintln!("Failed to show settings: {}", e);
                             }
+                                } else {
+                                    eprintln!("Window lock not available");
+                                }
+                            });
                         }
                         _ => {}
                     }
@@ -127,7 +175,8 @@ pub fn run() {
             let app_handle = app.handle().clone();
             
             // Parse and register command palette shortcut
-            let shortcut_str = "Control+Shift+L";
+            // Changed from Control+Shift+L to avoid conflicts with other apps
+            let shortcut_str = "Control+Shift+Space";
             match shortcut_str.parse::<Shortcut>() {
                 Ok(shortcut) => {
                     // First, unregister if already registered (clean slate)
@@ -141,53 +190,117 @@ pub fn run() {
                     let handle = app_handle.clone();
                     let last_app_state = app.state::<std::sync::Arc<std::sync::Mutex<Option<String>>>>();
                     let last_app_clone = last_app_state.inner().clone();
+                    // FIXED: Use the cloned debounce flag directly instead of accessing state
+                    let debounce_clone = shortcut_debounce.clone();
                     
                     if let Err(e) = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, _event| {
+                        // FIXED: Debounce to prevent concurrent triggers
+                        if debounce_clone.swap(true, std::sync::atomic::Ordering::Acquire) {
+                            println!("🔵 [DEBUG] Shortcut debounced - ignoring concurrent trigger");
+                            return;
+                        }
+                        
+                        println!("🔵 [DEBUG] ========== SHORTCUT TRIGGERED ==========");
+                        
                         // Spawn async task to avoid blocking the shortcut handler
                         let handle_clone = handle.clone();
                         let last_app_clone = last_app_clone.clone();
+                        let debounce_reset = debounce_clone.clone();
                         
+                        // Reset debounce flag after 500ms
                         tauri::async_runtime::spawn(async move {
-                            // Capture active app with proper error handling and mutex recovery
-                            match automation::get_active_app() {
-                                Ok(active_app) => {
+                            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                            debounce_reset.store(false, std::sync::atomic::Ordering::Release);
+                        });
+                        
+                        // Main shortcut handler task
+                        tauri::async_runtime::spawn(async move {
+                            println!("🔵 [DEBUG] [Shortcut] Async task started");
+                            
+                            // STEP 1: Capture active app BEFORE any operations
+                            println!("🔵 [DEBUG] [Shortcut] STEP 1: Capturing active app...");
+                            let initial_active_app = automation::get_active_app().ok();
+                            println!("🔵 [DEBUG] [Shortcut] Initial active app: {:?}", initial_active_app);
+                            
+                            // Store the active app for later paste operations
+                            if let Some(ref active_app) = initial_active_app {
                                     match last_app_clone.lock() {
                                         Ok(mut last_app) => {
                                             *last_app = Some(active_app.clone());
-                                            println!("[Shortcut] Stored last active app: {}", active_app);
+                                        println!("🔵 [DEBUG] [Shortcut] Stored active app: {}", active_app);
                                         }
                                         Err(poisoned) => {
-                                            eprintln!("[Shortcut] Mutex poisoned, recovering...");
+                                        eprintln!("🔴 [DEBUG] [Shortcut] Mutex poisoned, recovering...");
                                             let mut guard = poisoned.into_inner();
                                             *guard = Some(active_app.clone());
-                                            println!("[Shortcut] Stored last active app: {} (after recovery)", active_app);
-                                        }
                                     }
                                 }
+                            }
+                            
+                            // STEP 2: Detect text selection BEFORE opening window
+                            // This is the KEY FIX - we capture selection while original app still has focus
+                            // FIXED: Store original app before detection to restore focus later
+                            let original_app_before_detection = automation::get_active_app().ok();
+                            println!("🔵 [DEBUG] [Shortcut] STEP 2: Detecting text selection (BEFORE window creation)...");
+                            println!("🔵 [DEBUG] [Shortcut] Original app before detection: {:?}", original_app_before_detection);
+                            
+                            let (has_selection, _selected_text) = match automation::detect_text_selection(&handle_clone).await {
+                                Ok(result) => {
+                                    println!("🔵 [DEBUG] [Shortcut] ✓ Selection detection completed: has_selection={}", result.0);
+                                    result
+                                }
                                 Err(e) => {
-                                    eprintln!("[Shortcut] Failed to get active app: {}", e);
-                                    // Continue anyway - might still work
+                                    eprintln!("🔴 [DEBUG] [Shortcut] ✗ Selection detection failed: {}", e);
+                                    (false, None)
                                 }
-                            }
+                            };
                             
-                            // Simulate Cmd+C with permission check
-                            if let Err(e) = automation::simulate_cmd_c() {
-                                eprintln!("[Shortcut] Failed to simulate Cmd+C: {}", e);
-                                return; // Don't open palette if copy failed
-                            }
+                            // STEP 3: NOW open the palette window with the selection result
+                            // Since we already captured the selection, there's no focus conflict
+                            println!("🔵 [DEBUG] [Shortcut] STEP 3: Opening palette window (has_selection={})...", has_selection);
                             
-                            // Async sleep instead of blocking
-                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                            
-                            // Open palette window
-                            if let Err(e) = show_widget_window(&handle_clone, "palette") {
-                                eprintln!("[Shortcut] Failed to show palette window: {}", e);
+                            // Get window lock from app state
+                            if let Some(window_lock) = handle_clone.try_state::<std::sync::Arc<tokio::sync::Mutex<()>>>() {
+                                match show_widget_window_async(&handle_clone, "palette", has_selection, window_lock.inner().clone()).await {
+                                    Ok(_) => {
+                                        println!("🔵 [DEBUG] [Shortcut] ✓ Window opened successfully");
+                                        
+                                        // Just focus - no verification or retry (show_window_over_fullscreen handles retries internally)
+                                        if let Some(window) = handle_clone.get_webview_window("palette-window") {
+                                            // Increased delay for full transition to complete
+                                            tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
+                                            
+                                            // Set focus (safe during transition)
+                                            if let Err(e) = window.set_focus() {
+                                                eprintln!("🔴 [DEBUG] [Shortcut] ⚠️  Failed to give window focus: {}", e);
+                                            } else {
+                                                println!("🔵 [DEBUG] [Shortcut] ✓ Window has focus - ready for typing");
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        eprintln!("🔴 [DEBUG] [Shortcut] ✗ Failed to show palette window: {}", e);
+                                        return;
+                                    }
+                                }
                             } else {
-                                // Explicitly focus the palette window
-                                if let Some(window) = handle_clone.get_webview_window("palette-window") {
-                                    let _ = window.set_focus();
+                                eprintln!("🔴 [DEBUG] [Shortcut] ✗ Window lock not found in app state, using fallback");
+                                // Fallback to sync version
+                                if let Err(e) = show_widget_window(&handle_clone, "palette", has_selection) {
+                                    eprintln!("🔴 [DEBUG] [Shortcut] ✗ Fallback also failed: {}", e);
+                                } else {
+                                    // Give window focus after showing
+                                    if let Some(window) = handle_clone.get_webview_window("palette-window") {
+                                        std::thread::sleep(std::time::Duration::from_millis(150));
+                                        window.set_focus().ok();
+                                    }
                                 }
                             }
+                            
+                            // DONE: Window is shown and has focus, ready for user input
+                            println!("🔵 [DEBUG] [Shortcut] ✅ Window shown with focus - ready for typing!");
+                            
+                            println!("🔵 [DEBUG] ========== SHORTCUT HANDLER COMPLETE ==========");
                         });
                     }) {
                         eprintln!("Failed to set handler for command palette shortcut: {}", e);
@@ -227,34 +340,43 @@ pub fn run() {
 
 
             println!("✅ Productivity Widgets initialized successfully!");
-            println!("📋 Global Shortcut: Control+Shift+L");
+            println!("📋 Global Shortcut: Control+Shift+Space");
             println!("💡 All widgets and actions accessible via Command Palette");
+            
+            // Listen for floating window event
+            // In Tauri v2, we use a command handler instead of event listener
+            // The frontend will call a command to open the floating window
+            println!("✅ Floating panel ready (use command or emit event from frontend)");
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::capture_selection,
-            commands::translate_text,
-            commands::convert_currency,
-            commands::get_settings,
-            commands::save_settings,
-            commands::log_message,
-            commands::get_command_items,
-            commands::execute_action,
-            commands::get_cursor_position,
-            commands::get_primary_monitor_bounds,
-            commands::calculate_palette_position,
-            commands::hide_palette_window,
-            commands::focus_palette_window,
-            commands::get_clipboard_history,
-            commands::paste_clipboard_item,
-            commands::clear_clipboard_history,
-            commands::toggle_clipboard_monitor,
-            commands::get_clipboard_monitor_status,
-            commands::get_active_app,
-            commands::check_accessibility_permissions,
-            commands::record_command_usage,
-            commands::show_widget,
+            // Palette commands
+            commands::palette::capture_selection,
+            commands::palette::get_command_items,
+            commands::palette::execute_action,
+            commands::palette::record_command_usage,
+            // Window commands
+            commands::window::get_cursor_position,
+            commands::window::get_primary_monitor_bounds,
+            commands::window::calculate_palette_position,
+            commands::window::hide_palette_window,
+            commands::window::show_widget,
+            // System commands
+            commands::system::get_active_app,
+            commands::system::check_accessibility_permissions,
+            commands::system::log_message,
+            // Settings commands
+            commands::settings::get_settings,
+            commands::settings::save_settings,
+            // Feature commands
+            features::translator::translate_text,
+            features::currency::convert_currency,
+            features::clipboard::get_clipboard_history,
+            features::clipboard::paste_clipboard_item,
+            features::clipboard::clear_clipboard_history,
+            features::clipboard::toggle_clipboard_monitor,
+            features::clipboard::get_clipboard_monitor_status,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
@@ -268,11 +390,131 @@ pub fn run() {
         });
 }
 
-fn show_widget_window(app: &tauri::AppHandle, widget: &str) -> Result<(), Box<dyn std::error::Error>> {
+// Async version with mutex lock to prevent race conditions
+async fn show_widget_window_async(
+    app: &tauri::AppHandle,
+    widget: &str,
+    has_selection: bool,
+    window_lock: std::sync::Arc<tokio::sync::Mutex<()>>,
+) -> Result<(), String> {
+    // CRITICAL: Acquire lock to prevent concurrent operations
+    let _lock = window_lock.lock().await;
+    println!("🔵 [DEBUG] [show_widget_window] 🔒 Lock acquired for {}", widget);
+    
     let window_label = format!("{}-window", widget);
     
+    // Hide palette if opening a different widget
+    if widget != "palette" {
+        if let Some(palette) = app.get_webview_window("palette-window") {
+            println!("[Window] Hiding palette before opening {}", widget);
+            palette.hide().map_err(|e| format!("Failed to hide palette: {}", e))?;
+        }
+    }
+    
     // Define window dimensions
-    let (width, height, title, _transparent, decorations) = match widget {
+    let (width, height, _title, _transparent, _decorations) = match widget {
+        "palette" => (550, 328, "Command Palette", true, false),
+        "clipboard" => (500, 400, "Clipboard History", false, false),
+        "translator" => (700, 550, "Translator", false, false),
+        "currency" => (500, 400, "Currency Converter", false, false),
+        "settings" => (800, 600, "Settings", false, false),
+        _ => (600, 400, "Widget", false, false),
+    };
+    
+    // Check if window already exists
+    if let Some(window) = app.get_webview_window(&window_label) {
+        println!("🔵 [DEBUG] [show_widget_window] Window '{}' already exists", window_label);
+        
+        if widget == "palette" {
+            // Reset size
+            window.set_size(tauri::Size::Logical(tauri::LogicalSize {
+                width: width as f64,
+                height: height as f64,
+            })).ok();
+            
+            // CRITICAL: Configure and show ONCE - no verification or retry (internal retry handles it)
+            #[cfg(target_os = "macos")]
+            {
+                nswindow::configure_window_for_fullscreen(&window).ok();
+                nswindow::show_window_over_fullscreen(&window).ok();
+                // That's it! Internal retry handles the rest
+            }
+            
+            #[cfg(not(target_os = "macos"))]
+            {
+                window.set_always_on_top(true).ok();
+                window.show().ok();
+            }
+            
+            // Increased delay for full transition to complete
+            tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
+        } else {
+            // CRITICAL FIX: Configure and show ALL widgets over fullscreen
+            #[cfg(target_os = "macos")]
+            {
+                nswindow::configure_window_for_fullscreen(&window).ok();
+                nswindow::show_window_over_fullscreen(&window).ok();
+                // That's it! Internal retry handles the rest
+            }
+            
+            #[cfg(not(target_os = "macos"))]
+            {
+                window.set_always_on_top(true).ok();
+                window.show().ok();
+            }
+            
+            // Increased delay for full transition to complete
+            tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
+        }
+        
+        println!("🔵 [DEBUG] [show_widget_window] 🔓 Lock released");
+        return Ok(());
+    }
+    
+    // Continue to new window creation...
+    show_widget_window_create_new_async(app, widget, has_selection).await
+}
+
+// Sync wrapper for menu items (they can't be async)
+// FIXED: Use spawn instead of block_on to avoid runtime conflicts
+fn show_widget_window(app: &tauri::AppHandle, widget: &str, has_selection: bool) -> Result<(), String> {
+    // Get window lock from app state
+    if let Some(window_lock) = app.try_state::<std::sync::Arc<tokio::sync::Mutex<()>>>() {
+        // Spawn async task instead of blocking
+        // This avoids "Cannot start a runtime from within a runtime" panic
+        let app_clone = app.clone();
+        let widget_str = widget.to_string();
+        let lock_clone = window_lock.inner().clone();
+        
+        tauri::async_runtime::spawn(async move {
+            match show_widget_window_async(&app_clone, &widget_str, has_selection, lock_clone).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("Failed to show window '{}': {}", widget_str, e),
+            }
+        });
+        
+        // Return immediately (fire and forget for sync callers)
+        Ok(())
+    } else {
+        // Fallback: call legacy implementation if lock not available
+        show_widget_window_legacy(app, widget, has_selection)
+    }
+}
+
+// Legacy implementation (kept for fallback)
+fn show_widget_window_legacy(app: &tauri::AppHandle, widget: &str, has_selection: bool) -> Result<(), String> {
+    let window_label = format!("{}-window", widget);
+    
+    // Hide palette if opening a different widget
+    if widget != "palette" {
+        if let Some(palette) = app.get_webview_window("palette-window") {
+            println!("[Window] Hiding palette before opening {}", widget);
+            palette.hide().map_err(|e| format!("Failed to hide palette: {}", e))?;
+        }
+    }
+    
+    // Define window dimensions
+    let (width, height, _title, _transparent, _decorations) = match widget {
         "palette" => (550, 328, "Command Palette", true, false),
         "clipboard" => (500, 400, "Clipboard History", false, false),
         "translator" => (700, 550, "Translator", false, false),  // Increased height
@@ -283,43 +525,121 @@ fn show_widget_window(app: &tauri::AppHandle, widget: &str) -> Result<(), Box<dy
     
     // Check if window already exists
     if let Some(window) = app.get_webview_window(&window_label) {
+        println!("🔵 [DEBUG] [show_widget_window] Window '{}' already exists", window_label);
+        
+        
         // For palette window, reset size to ensure stability
+        println!("🔴🔴🔴 [CRITICAL DEBUG] widget = '{}', checking if == 'palette'", widget);
         if widget == "palette" {
-            println!("[DEBUG] Resetting palette window size to {}x{}", width, height);
-            window.set_size(tauri::Size::Logical(tauri::LogicalSize {
+            println!("🔴🔴🔴 [CRITICAL DEBUG] INSIDE PALETTE BLOCK - THIS SHOULD APPEAR!");
+            println!("🔵 [DEBUG] [show_widget_window] Resetting palette window size to {}x{}", width, height);
+            if let Err(e) = window.set_size(tauri::Size::Logical(tauri::LogicalSize {
                 width: width as f64,
                 height: height as f64,
-            }))?;
-            // Ensure window is hidden until transparency is ready
-            window.hide()?;
-            // Small delay to ensure transparency is applied
-            std::thread::sleep(std::time::Duration::from_millis(10));
-            window.show()?;
-        } else {
-            window.show()?;
+            })) {
+                eprintln!("Failed to set window size: {}", e);
+            }
+            
+            // For existing palette window, configure for fullscreen overlay
+            println!("🔵 [DEBUG] [show_widget_window] Configuring existing palette window...");
+            
+            // CRITICAL: Use native method to show window over fullscreen
+            #[cfg(target_os = "macos")]
+            {
+                match nswindow::show_window_over_fullscreen(&window) {
+                    Ok(_) => {
+                        println!("🔵 [DEBUG] [show_widget_window] ✓ Window shown over fullscreen successfully");
+                        
+                        // Verify visibility
+                        if let Ok((is_visible, is_on_active_space, _, _, _, _)) = nswindow::verify_window_visibility(&window) {
+                            if is_visible && is_on_active_space {
+                                println!("🔵 [DEBUG] [show_widget_window] ✅ Window is visible on active space!");
+                            } else {
+                                eprintln!("🔴 [DEBUG] [show_widget_window] ⚠️  Visibility issue: visible={}, onActiveSpace={}", is_visible, is_on_active_space);
+                            }
+                        }
+                    },
+                Err(e) => {
+                        eprintln!("🔴 [DEBUG] [show_widget_window] ⚠️  Failed to show over fullscreen: {}", e);
+                    // Fallback
+                        window.set_always_on_top(true).ok();
+                        window.show().ok();
+                    }
+                }
+            }
+            
+            #[cfg(not(target_os = "macos"))]
+            {
+                window.set_always_on_top(true).ok();
+                window.show().ok();
+            }
+                    
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                            } else {
+            println!("🔵 [DEBUG] [show_widget_window] Showing non-palette widget '{}'...", widget);
+            
+            // CRITICAL FIX: Use native method to show all widgets over fullscreen
+            #[cfg(target_os = "macos")]
+            {
+                match nswindow::show_window_over_fullscreen(&window) {
+                    Ok(_) => {
+                        println!("🔵 [DEBUG] [show_widget_window] ✓ Widget '{}' shown over fullscreen successfully", widget);
+                    },
+                        Err(e) => {
+                        eprintln!("🔴 [DEBUG] [show_widget_window] ⚠️  Failed to show widget '{}' over fullscreen: {}", widget, e);
+                    // Fallback
+                        window.set_always_on_top(true).ok();
+                        window.show().ok();
+                        window.set_focus().ok();
+                    }
+                }
+            }
+            
+            #[cfg(not(target_os = "macos"))]
+            {
+                window.set_always_on_top(true).ok();
+                window.show().ok();
+                window.set_focus().ok();
+            }
         }
-        // Ensure focus is set (double-focus for palette to ensure it sticks)
-        window.set_focus()?;
-        if widget == "palette" {
-            std::thread::sleep(std::time::Duration::from_millis(50));
-            window.set_focus()?;
-        }
+        
+        println!("🔵 [DEBUG] [show_widget_window] Returning early (window already existed)");
         return Ok(());
     }
+    
+    // Create new window (sync version for legacy)
+    show_widget_window_create_new_legacy(app, widget, has_selection)
+}
+
+// Create new window (async version)
+async fn show_widget_window_create_new_async(app: &tauri::AppHandle, widget: &str, has_selection: bool) -> Result<(), String> {
+    let window_label = format!("{}-window", widget);
+    
+    // Define window dimensions
+    let (width, height, title, _transparent, decorations) = match widget {
+        "palette" => (550, 328, "Command Palette", true, false),
+        "clipboard" => (500, 400, "Clipboard History", false, false),
+        "translator" => (700, 550, "Translator", false, false),
+        "currency" => (500, 400, "Currency Converter", false, false),
+        "settings" => (800, 600, "Settings", false, false),
+        _ => (600, 400, "Widget", false, false),
+    };
 
     // Create new window
     let is_resizable = widget != "palette"; // Palette is non-resizable
     
     // Base builder with transparency for ALL windows initially
     // For palette, start invisible to prevent flash, then show after transparency is ready
+    // CRITICAL: For palette, create window HIDDEN so we can convert to NSPanel before showing
+    // Sequence: build (hidden) → convert to NSPanel → configure → THEN show()
     let start_visible = widget != "palette";
     let mut builder = WebviewWindowBuilder::new(app, &window_label, WebviewUrl::App(format!("index.html?widget={}", widget).into()))
         .title(title)
         .inner_size(width as f64, height as f64)
         .resizable(is_resizable)
-        .focused(true)
-        .always_on_top(true)
-        .visible(start_visible)
+        .focused(false)  // CRITICAL: Don't focus before configuration (macOS rejects it in fullscreen)
+        .always_on_top(widget == "palette")  // Fallback
+        .visible(start_visible)  // Palette starts hidden, other widgets can be visible
         .transparent(true)  // All windows start transparent
         .decorations(false)  // All windows start without decorations
         .skip_taskbar(true);  // Don't show in Dock/taskbar
@@ -329,19 +649,25 @@ fn show_widget_window(app: &tauri::AppHandle, widget: &str) -> Result<(), Box<dy
         builder = builder.decorations(true).transparent(false);
     }
     
-    // Add size constraints for palette to prevent resizing
+    // Add size constraints and floating properties for palette
     if widget == "palette" {
         builder = builder
             .min_inner_size(width as f64, height as f64)
-            .max_inner_size(width as f64, height as f64);
+            .max_inner_size(width as f64, height as f64)
+            // DO NOT use visible_on_all_workspaces - we want it on CURRENT space only
+            // visible_on_all_workspaces makes it appear on all spaces, which causes it to appear on wrong space
+            .always_on_top(true);  // Always on top
     }
     
     // Special positioning for palette window
     if widget == "palette" {
-        // Get cursor position and screen bounds
+        // CONDITIONAL POSITIONING based on selection detection
+        if has_selection {
+            // LOGIC A: Text was selected → Position at CURSOR
+            println!("[Position] Mode: CURSOR (text selected)");
+            
         use mouse_position::mouse_position::Mouse;
         
-        println!("[DEBUG] Attempting to get cursor position...");
         if let Mouse::Position { x: cursor_x, y: cursor_y } = Mouse::get_mouse_position() {
             println!("[DEBUG] Raw cursor position: ({}, {})", cursor_x, cursor_y);
             
@@ -361,23 +687,16 @@ fn show_widget_window(app: &tauri::AppHandle, widget: &str) -> Result<(), Box<dy
                     let mon_width = (size.width as f64 * scale) as i32;
                     let mon_height = (size.height as f64 * scale) as i32;
                     
-                    println!("[DEBUG] Checking monitor: pos=({}, {}), size={}x{} (physical), scale={}", 
-                        mon_x, mon_y, mon_width, mon_height, scale);
-                    
                     // Check if cursor is within this monitor's bounds (physical pixels)
                     if cursor_x >= mon_x && cursor_x < mon_x + mon_width &&
                        cursor_y >= mon_y && cursor_y < mon_y + mon_height {
                         target_monitor = Some(monitor);
-                        println!("[DEBUG] ✓ Cursor is on this monitor!");
                         break;
                     }
                 }
                 
                 // Use the monitor containing the cursor, or fall back to primary
-                let monitor = target_monitor.or_else(|| {
-                    println!("[DEBUG] Cursor not found on any monitor, using primary");
-                    app.primary_monitor().ok().flatten()
-                });
+                    let monitor = target_monitor.or_else(|| app.primary_monitor().ok().flatten());
                 
                 if let Some(monitor) = monitor {
                     let position = monitor.position();
@@ -389,83 +708,80 @@ fn show_widget_window(app: &tauri::AppHandle, widget: &str) -> Result<(), Box<dy
                     let screen_width = size.width as f64;
                     let screen_height = size.height as f64;
                     
-                    println!("[DEBUG] Using monitor: x={}, y={}, width={}, height={} (logical)", 
-                        screen_x, screen_y, screen_width, screen_height);
-                    println!("[DEBUG] Scale factor: {}", scale_factor);
-                    
                     // Convert cursor position from physical to logical pixels
                     let cursor_logical_x = (cursor_x as f64) / scale_factor;
                     let cursor_logical_y = (cursor_y as f64) / scale_factor;
                     
-                    println!("[DEBUG] Cursor position (logical): ({}, {})", cursor_logical_x, cursor_logical_y);
-                    
                     // Calculate optimal position with boundary detection
-                    const PALETTE_WIDTH: f64 = 550.0; // Full window width
+                        const PALETTE_WIDTH: f64 = 550.0;
                     const PALETTE_HEIGHT: f64 = 328.0;
                     
                     let mut x = cursor_logical_x;
                     let mut y = cursor_logical_y;
                     
-                    println!("[DEBUG] Initial position: ({}, {})", x, y);
-                    
-                    // Check right boundary
+                        // Boundary checks
                     if x + PALETTE_WIDTH > screen_x + screen_width {
                         x = screen_x + screen_width - PALETTE_WIDTH;
-                        println!("[DEBUG] Adjusted for right boundary: x={}", x);
                     }
-                    
-                    // Check bottom boundary
                     if y + PALETTE_HEIGHT > screen_y + screen_height {
                         y = screen_y + screen_height - PALETTE_HEIGHT;
-                        println!("[DEBUG] Adjusted for bottom boundary: y={}", y);
+                        }
+                        if x < screen_x { x = screen_x; }
+                        if y < screen_y { y = screen_y; }
+                        
+                        println!("[Position] Cursor mode: ({}, {})", x, y);
+                        builder = builder.position(x, y);
+                    } else {
+                        println!("[Position] No monitor found, using center");
+                        builder = builder.center();
                     }
-                    
-                    // Check left boundary
-                    if x < screen_x {
-                        x = screen_x;
-                        println!("[DEBUG] Adjusted for left boundary: x={}", x);
-                    }
-                    
-                    // Check top boundary
-                    if y < screen_y {
-                        y = screen_y;
-                        println!("[DEBUG] Adjusted for top boundary: y={}", y);
-                    }
-                    
-                    println!("[DEBUG] Final position: ({}, {})", x, y);
-                    
-                    // Position at calculated coordinates
-                    builder = builder.position(x, y);
                 } else {
-                    println!("[DEBUG] No monitor found, using center");
+                    println!("[Position] Failed to get monitors, using center");
                     builder = builder.center();
                 }
             } else {
-                println!("[DEBUG] Failed to get monitors, using center");
+                println!("[Position] Failed to get cursor, using center");
                 builder = builder.center();
             }
         } else {
-            println!("[DEBUG] Failed to get cursor position, using center");
-            // Fallback to center if cursor position unavailable
+            // LOGIC B: No text selected → Position at CENTER
+            println!("[Position] Mode: CENTER (no selection)");
             builder = builder.center();
         }
-        // Palette transparency already set in base builder
     } else {
-        // Other widgets use center positioning
+        // LOGIC C: All other widgets → always CENTER
+        println!("[Position] Widget center positioning");
         builder = builder.center().decorations(decorations);
     }
     
-    let window = builder.build()?;
+    println!("🔵 [DEBUG] [show_widget_window] Building new window '{}' (hidden={})...", window_label, !start_visible);
+    let window = builder.build().map_err(|e: tauri::Error| format!("Failed to build window: {}", e))?;
+    println!("🔵 [DEBUG] [show_widget_window] ✓ Window built successfully");
     
-    // For palette window, ensure transparency is ready before showing
-    if widget == "palette" {
-        // Small delay to ensure transparency is applied
-        std::thread::sleep(std::time::Duration::from_millis(10));
-        window.show()?;
-        // Ensure focus is set (double-focus to ensure it sticks)
-        window.set_focus()?;
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        window.set_focus()?;
+        // CRITICAL FIX: Configure ALL widgets for fullscreen overlay IMMEDIATELY after creation
+        // This ensures translator, currency, clipboard, settings, etc. all appear over fullscreen apps
+        if widget == "palette" || widget == "translator" || widget == "currency" || widget == "clipboard" || widget == "settings" {
+            println!("🔵 [DEBUG] [show_widget_window] Configuring widget '{}' for fullscreen overlay...", widget);
+            
+            // CRITICAL: Configure and show ONCE - no verification or retry (internal retry handles it)
+            #[cfg(target_os = "macos")]
+            {
+                nswindow::configure_window_for_fullscreen(&window).ok();
+                nswindow::show_window_over_fullscreen(&window).ok();
+                // That's it! Internal retry handles the rest
+            }
+            
+            #[cfg(not(target_os = "macos"))]
+            {
+                // Non-macOS: Use standard Tauri methods
+                window.set_always_on_top(true).ok();
+                window.show().ok();
+            }
+            
+            // Increased delay for full transition to complete
+            tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
+            
+            println!("🔵 [DEBUG] [show_widget_window] Widget '{}' creation complete", widget);
     }
     
     // Add blur event listener for click-outside behavior (except palette)
@@ -481,3 +797,24 @@ fn show_widget_window(app: &tauri::AppHandle, widget: &str) -> Result<(), Box<dy
 
     Ok(())
 }
+
+// Create new window (sync version for legacy fallback)
+// FIXED: Use spawn instead of block_on to avoid runtime conflicts
+fn show_widget_window_create_new_legacy(app: &tauri::AppHandle, widget: &str, has_selection: bool) -> Result<(), String> {
+    // Spawn async task instead of blocking
+    let app_clone = app.clone();
+    let widget_str = widget.to_string();
+    
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = show_widget_window_create_new_async(&app_clone, &widget_str, has_selection).await {
+            eprintln!("Failed to create window '{}': {}", widget_str, e);
+        }
+    });
+    
+    // Return immediately (fire and forget)
+    Ok(())
+}
+
+// NOTE: The create_floating_panel function has been removed.
+// We now configure Tauri windows directly as non-activating panels
+// instead of creating separate NSPanel instances.

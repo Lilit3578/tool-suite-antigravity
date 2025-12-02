@@ -33,6 +33,10 @@ urlencoding = "2.1"
 mouse_position = "0.1"
 uuid = { version = "1.11", features = ["v4", "serde"] }
 regex = "1.11"
+cli-clipboard = "0.4"  # System-level clipboard access without app activation
 
-
-
+# macOS native window management
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.25"
+objc = "0.2"
+block = "0.1"

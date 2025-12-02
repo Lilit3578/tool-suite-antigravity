@@ -17,6 +17,7 @@ interface AppState {
     setPaletteQuery: (query: string) => void;
     paletteSelectedIndex: number;
     setPaletteSelectedIndex: (index: number) => void;
+    resetPalette: () => void; // ← NEW: Reset palette state
 
     // Translator state
     translatorInput: string;
@@ -59,6 +60,10 @@ export const useAppStore = create<AppState>((set) => ({
     setPaletteQuery: (query) => set({ paletteQuery: query }),
     paletteSelectedIndex: 0,
     setPaletteSelectedIndex: (index) => set({ paletteSelectedIndex: index }),
+    resetPalette: () => set({
+        paletteQuery: "",
+        paletteSelectedIndex: 0
+    }),
 
     // Translator
     translatorInput: "",
