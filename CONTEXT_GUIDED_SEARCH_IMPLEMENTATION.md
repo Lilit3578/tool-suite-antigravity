@@ -317,7 +317,7 @@ pub fn get_all_features() -> Vec<Box<dyn Feature>> {
 - Filtered results:
   1. **"Convert to USD"** (category: currency) ← Boosted
   2. **"Convert to EUR"** (category: currency) ← Boosted
-  3. ~~"Convert to Meters"~~ (category: length) ← Hidden
+  3. ~~"Convert to Meters"~~ (category: length) ← Hiddens
 
 ### Scenario 3: User opens palette, no text selected, types "ita"
 

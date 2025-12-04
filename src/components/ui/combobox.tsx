@@ -52,7 +52,7 @@ export function Combobox({
                         // Black pill button styling - reduced height
                         "w-fit min-w-[120px] justify-center rounded-full px-4 py-0.5 h-6",
                         "hover:bg-ink-800 hover:text-ink-0",
-                        "font-normal tracking-normal lowercase",
+                        "font-normal tracking-normal",
                         className
                     )}
                 >
