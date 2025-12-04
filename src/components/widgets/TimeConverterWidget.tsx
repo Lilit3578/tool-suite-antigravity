@@ -71,7 +71,6 @@ export function TimeConverterWidget() {
                         // Set initialization flag to prevent conversions during load
                         isInitializingRef.current = true;
                         const initialTimeInput = parsed.time_input;
-                        const initialSourceTz = parsed.source_timezone || "Local";
                         setFromTime(initialTimeInput);
                         if (parsed.source_timezone) {
                             setSourceTimezone(parsed.source_timezone);
@@ -79,6 +78,7 @@ export function TimeConverterWidget() {
                         }
                         // Mark initialization complete after a delay to allow state to settle
                         // Then FROM→TO will automatically convert
+                        // Use sourceTimezoneRef.current to get current timezone (user may have changed it)
                         setTimeout(() => {
                             console.log('[TimeConverter] ✅ Initialization complete, triggering FROM→TO auto-convert');
                             isInitializingRef.current = false;
@@ -86,7 +86,8 @@ export function TimeConverterWidget() {
                             // Manually trigger conversion since refs don't trigger useEffect
                             const convId = ++conversionIdRef.current;
                             console.log(`[TimeConverter] 🚀 Manually triggering FROM→TO conversion [${convId}] after init`);
-                            convertFromToTo(initialTimeInput, initialSourceTz, targetTimezoneRef.current, convId);
+                            // Use current timezone values from refs (user may have changed them)
+                            convertFromToTo(initialTimeInput, sourceTimezoneRef.current, targetTimezoneRef.current, convId);
                         }, 1000);
                     } else {
                         console.log('[TimeConverter] ⏭️  Skipping clipboard text (empty or "now")');
@@ -122,7 +123,6 @@ export function TimeConverterWidget() {
                         // Set initialization flag to prevent conversions during load
                         isInitializingRef.current = true;
                         const initialTimeInput = parsed.time_input;
-                        const initialSourceTz = parsed.source_timezone || "Local";
                         setFromTime(initialTimeInput);
                         if (parsed.source_timezone) {
                             setSourceTimezone(parsed.source_timezone);
@@ -130,6 +130,7 @@ export function TimeConverterWidget() {
                         }
                         // Mark initialization complete after a delay to allow state to settle
                         // Then FROM→TO will automatically convert
+                        // Use sourceTimezoneRef.current to get current timezone (user may have changed it)
                         setTimeout(() => {
                             console.log('[TimeConverter] ✅ Initialization complete, triggering FROM→TO auto-convert');
                             isInitializingRef.current = false;
@@ -137,7 +138,8 @@ export function TimeConverterWidget() {
                             // Manually trigger conversion since refs don't trigger useEffect
                             const convId = ++conversionIdRef.current;
                             console.log(`[TimeConverter] 🚀 Manually triggering FROM→TO conversion [${convId}] after init`);
-                            convertFromToTo(initialTimeInput, initialSourceTz, targetTimezoneRef.current, convId);
+                            // Use current timezone values from refs (user may have changed them)
+                            convertFromToTo(initialTimeInput, sourceTimezoneRef.current, targetTimezoneRef.current, convId);
                         }, 1000);
                     } else {
                         console.log('[TimeConverter] ⏭️  Skipping selection text (empty or "now")');
