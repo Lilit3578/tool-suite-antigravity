@@ -1,13 +1,8 @@
-mod settings;
-mod types;
-mod commands;
-mod features;
-mod clipboard;
-mod automation;
-mod context;
-mod nswindow; // macOS native window configuration
-#[cfg(target_os = "macos")]
-mod panel; // Floating panel implementation
+// Module declarations - these are re-exported from their respective modules
+mod shared;
+mod api;
+mod core;
+mod system;
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -28,7 +23,7 @@ pub fn run() {
             // This prevents space-switching when activating the app
             #[cfg(target_os = "macos")]
             {
-                if let Err(e) = nswindow::set_app_activation_policy_accessory() {
+                if let Err(e) = system::window::nswindow::set_app_activation_policy_accessory() {
                     eprintln!("⚠️  Failed to set Accessory mode: {}", e);
                 } else {
                     println!("✅ App set to Accessory mode (no Dock icon, no space switching)");
@@ -36,18 +31,18 @@ pub fn run() {
             }
             
             // Load settings
-            let _settings = settings::AppSettings::load()
+            let _settings = shared::settings::AppSettings::load()
                 .unwrap_or_else(|e| {
                     eprintln!("Failed to load settings: {}", e);
-                    settings::AppSettings::default()
+                    shared::settings::AppSettings::default()
                 });
 
             // Initialize clipboard history and monitor
-            let clipboard_history = clipboard::ClipboardHistory::new();
-            let clipboard_monitor = clipboard::ClipboardMonitor::new(clipboard_history.clone_arc());
+            let clipboard_history = core::clipboard::history::ClipboardHistory::new();
+            let clipboard_monitor = core::clipboard::monitor::ClipboardMonitor::new(clipboard_history.clone_arc());
             
             // Initialize usage metrics for intelligent ranking
-            let usage_metrics = context::UsageMetrics::new();
+            let usage_metrics = core::context::UsageMetrics::new();
             
             // Initialize last active app tracker
             let last_active_app = std::sync::Arc::new(std::sync::Mutex::new(None::<String>));
@@ -133,7 +128,7 @@ pub fn run() {
                             });
                         }
                         "toggle_monitor" => {
-                            if let Some(monitor) = app.try_state::<clipboard::ClipboardMonitor>() {
+                            if let Some(monitor) = app.try_state::<core::clipboard::monitor::ClipboardMonitor>() {
                                 let enabled = monitor.toggle();
                                 println!("Clipboard monitoring: {}", if enabled { "enabled" } else { "disabled" });
                                 
@@ -143,7 +138,7 @@ pub fn run() {
                             }
                         }
                         "clear_history" => {
-                            if let Some(history) = app.try_state::<clipboard::ClipboardHistory>() {
+                            if let Some(history) = app.try_state::<core::clipboard::history::ClipboardHistory>() {
                                 history.clear();
                                 println!("Clipboard history cleared");
                             }
@@ -219,7 +214,7 @@ pub fn run() {
                             
                             // STEP 1: Capture active app BEFORE any operations
                             println!("🔵 [DEBUG] [Shortcut] STEP 1: Capturing active app...");
-                            let initial_active_app = automation::get_active_app().ok();
+                            let initial_active_app = system::automation::macos::get_active_app().ok();
                             println!("🔵 [DEBUG] [Shortcut] Initial active app: {:?}", initial_active_app);
                             
                             // Store the active app for later paste operations
@@ -240,11 +235,11 @@ pub fn run() {
                             // STEP 2: Detect text selection BEFORE opening window
                             // This is the KEY FIX - we capture selection while original app still has focus
                             // FIXED: Store original app before detection to restore focus later
-                            let original_app_before_detection = automation::get_active_app().ok();
+                            let original_app_before_detection = system::automation::macos::get_active_app().ok();
                             println!("🔵 [DEBUG] [Shortcut] STEP 2: Detecting text selection (BEFORE window creation)...");
                             println!("🔵 [DEBUG] [Shortcut] Original app before detection: {:?}", original_app_before_detection);
                             
-                            let (has_selection, _selected_text) = match automation::detect_text_selection(&handle_clone).await {
+                            let (has_selection, _selected_text) = match system::automation::macos::detect_text_selection(&handle_clone).await {
                                 Ok(result) => {
                                     println!("🔵 [DEBUG] [Shortcut] ✓ Selection detection completed: has_selection={}", result.0);
                                     result
@@ -352,31 +347,34 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             // Palette commands
-            commands::palette::capture_selection,
-            commands::palette::get_command_items,
-            commands::palette::execute_action,
-            commands::palette::record_command_usage,
+            api::commands::palette::capture_selection,
+            api::commands::palette::get_command_items,
+            api::commands::palette::execute_action,
+            api::commands::palette::record_command_usage,
             // Window commands
-            commands::window::get_cursor_position,
-            commands::window::get_primary_monitor_bounds,
-            commands::window::calculate_palette_position,
-            commands::window::hide_palette_window,
-            commands::window::show_widget,
+            api::commands::window::get_cursor_position,
+            api::commands::window::get_primary_monitor_bounds,
+            api::commands::window::calculate_palette_position,
+            api::commands::window::hide_palette_window,
+            api::commands::window::show_widget,
             // System commands
-            commands::system::get_active_app,
-            commands::system::check_accessibility_permissions,
-            commands::system::log_message,
+            api::commands::system::get_active_app,
+            api::commands::system::check_accessibility_permissions,
+            api::commands::system::log_message,
             // Settings commands
-            commands::settings::get_settings,
-            commands::settings::save_settings,
+            api::commands::settings::get_settings,
+            api::commands::settings::save_settings,
             // Feature commands
-            features::translator::translate_text,
-            features::currency::convert_currency,
-            features::clipboard::get_clipboard_history,
-            features::clipboard::paste_clipboard_item,
-            features::clipboard::clear_clipboard_history,
-            features::clipboard::toggle_clipboard_monitor,
-            features::clipboard::get_clipboard_monitor_status,
+            core::features::translator::translate_text,
+            core::features::currency::convert_currency,
+            core::features::clipboard::get_clipboard_history,
+            core::features::clipboard::paste_clipboard_item,
+            core::features::clipboard::clear_clipboard_history,
+            core::features::clipboard::toggle_clipboard_monitor,
+            core::features::clipboard::get_clipboard_monitor_status,
+            core::features::time_converter::convert_time,
+            core::features::time_converter::get_timezones,
+            core::features::time_converter::parse_time_from_selection,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
@@ -417,6 +415,7 @@ async fn show_widget_window_async(
         "clipboard" => (500, 400, "Clipboard History", false, false),
         "translator" => (700, 550, "Translator", false, false),
         "currency" => (500, 400, "Currency Converter", false, false),
+        "time_converter" => (600, 500, "Time Zone Converter", false, false),
         "settings" => (800, 600, "Settings", false, false),
         _ => (600, 400, "Widget", false, false),
     };
@@ -435,8 +434,8 @@ async fn show_widget_window_async(
             // CRITICAL: Configure and show ONCE - no verification or retry (internal retry handles it)
             #[cfg(target_os = "macos")]
             {
-                nswindow::configure_window_for_fullscreen(&window).ok();
-                nswindow::show_window_over_fullscreen(&window).ok();
+                system::window::nswindow::configure_window_for_fullscreen(&window).ok();
+                system::window::nswindow::show_window_over_fullscreen(&window).ok();
                 // That's it! Internal retry handles the rest
             }
             
@@ -452,8 +451,8 @@ async fn show_widget_window_async(
             // CRITICAL FIX: Configure and show ALL widgets over fullscreen
             #[cfg(target_os = "macos")]
             {
-                nswindow::configure_window_for_fullscreen(&window).ok();
-                nswindow::show_window_over_fullscreen(&window).ok();
+                system::window::nswindow::configure_window_for_fullscreen(&window).ok();
+                system::window::nswindow::show_window_over_fullscreen(&window).ok();
                 // That's it! Internal retry handles the rest
             }
             
@@ -519,6 +518,7 @@ fn show_widget_window_legacy(app: &tauri::AppHandle, widget: &str, has_selection
         "clipboard" => (500, 400, "Clipboard History", false, false),
         "translator" => (700, 550, "Translator", false, false),  // Increased height
         "currency" => (500, 400, "Currency Converter", false, false),  // Increased height
+        "time_converter" => (600, 500, "Time Zone Converter", false, false),
         "settings" => (800, 600, "Settings", false, false),
         _ => (600, 400, "Widget", false, false),
     };
@@ -546,12 +546,12 @@ fn show_widget_window_legacy(app: &tauri::AppHandle, widget: &str, has_selection
             // CRITICAL: Use native method to show window over fullscreen
             #[cfg(target_os = "macos")]
             {
-                match nswindow::show_window_over_fullscreen(&window) {
+                match system::window::nswindow::show_window_over_fullscreen(&window) {
                     Ok(_) => {
                         println!("🔵 [DEBUG] [show_widget_window] ✓ Window shown over fullscreen successfully");
                         
                         // Verify visibility
-                        if let Ok((is_visible, is_on_active_space, _, _, _, _)) = nswindow::verify_window_visibility(&window) {
+                        if let Ok((is_visible, is_on_active_space, _, _, _, _)) = system::window::nswindow::verify_window_visibility(&window) {
                             if is_visible && is_on_active_space {
                                 println!("🔵 [DEBUG] [show_widget_window] ✅ Window is visible on active space!");
                             } else {
@@ -581,7 +581,7 @@ fn show_widget_window_legacy(app: &tauri::AppHandle, widget: &str, has_selection
             // CRITICAL FIX: Use native method to show all widgets over fullscreen
             #[cfg(target_os = "macos")]
             {
-                match nswindow::show_window_over_fullscreen(&window) {
+                match system::window::nswindow::show_window_over_fullscreen(&window) {
                     Ok(_) => {
                         println!("🔵 [DEBUG] [show_widget_window] ✓ Widget '{}' shown over fullscreen successfully", widget);
                     },
@@ -621,6 +621,7 @@ async fn show_widget_window_create_new_async(app: &tauri::AppHandle, widget: &st
         "clipboard" => (500, 400, "Clipboard History", false, false),
         "translator" => (700, 550, "Translator", false, false),
         "currency" => (500, 400, "Currency Converter", false, false),
+        "time_converter" => (600, 500, "Time Zone Converter", false, false),
         "settings" => (800, 600, "Settings", false, false),
         _ => (600, 400, "Widget", false, false),
     };
@@ -766,8 +767,8 @@ async fn show_widget_window_create_new_async(app: &tauri::AppHandle, widget: &st
             // CRITICAL: Configure and show ONCE - no verification or retry (internal retry handles it)
             #[cfg(target_os = "macos")]
             {
-                nswindow::configure_window_for_fullscreen(&window).ok();
-                nswindow::show_window_over_fullscreen(&window).ok();
+                system::window::nswindow::configure_window_for_fullscreen(&window).ok();
+                system::window::nswindow::show_window_over_fullscreen(&window).ok();
                 // That's it! Internal retry handles the rest
             }
             

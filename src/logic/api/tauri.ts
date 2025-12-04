@@ -6,12 +6,18 @@ import type {
     TranslateResponse,
     ConvertCurrencyRequest,
     ConvertCurrencyResponse,
+    ConvertTimeRequest,
+    ConvertTimeResponse,
+    TimezoneInfo,
+    ParsedTimeInput,
     LogRequest,
     CommandItem,
+    ContextCategory,
     ExecuteActionRequest,
     ExecuteActionResponse,
     ClipboardItem,
-} from "./types";
+} from "../types";
+
 
 /**
  * Typed API layer for Tauri IPC commands
@@ -64,8 +70,8 @@ export const api = {
     /**
      * Get command items for the palette (with context-aware ranking)
      */
-    async getCommandItems(capturedText?: string): Promise<CommandItem[]> {
-        return invoke<CommandItem[]>("get_command_items", { capturedText });
+    async getCommandItems(capturedText?: string): Promise<{ commands: CommandItem[]; detected_context?: ContextCategory }> {
+        return invoke<{ commands: CommandItem[]; detected_context?: ContextCategory }>("get_command_items", { capturedText });
     },
 
     /**
@@ -143,5 +149,26 @@ export const api = {
      */
     async recordCommandUsage(commandId: string): Promise<void> {
         return invoke<void>("record_command_usage", { commandId });
+    },
+
+    /**
+     * Convert time between timezones with natural language parsing
+     */
+    async convertTime(request: ConvertTimeRequest): Promise<ConvertTimeResponse> {
+        return invoke<ConvertTimeResponse>("convert_time", { request });
+    },
+
+    /**
+     * Get all available timezones
+     */
+    async getTimezones(): Promise<TimezoneInfo[]> {
+        return invoke<TimezoneInfo[]>("get_timezones");
+    },
+
+    /**
+     * Parse time from selected text (extract time and timezone)
+     */
+    async parseTimeFromSelection(text: string): Promise<ParsedTimeInput> {
+        return invoke<ParsedTimeInput>("parse_time_from_selection", { text });
     },
 };

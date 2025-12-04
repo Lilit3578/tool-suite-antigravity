@@ -2,8 +2,8 @@
 //!
 //! Handles application settings persistence.
 
-use crate::settings::AppSettings;
-use super::error::CommandResult;
+use crate::shared::settings::AppSettings;
+use crate::api::error::CommandResult;
 
 /// Get current application settings
 #[tauri::command]

@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { Settings as SettingsIcon, Save, X } from "lucide-react";
-import { useAppStore } from "../store";
-import { api } from "../api";
-import type { AppSettings } from "../types";
+import { useAppStore } from "../../logic/state/store";
+import { api } from "../../logic/api/tauri";
+import type { AppSettings } from "../../logic/types";
+
 
 export function SettingsWidget() {
     const { settings, setSettings } = useAppStore();

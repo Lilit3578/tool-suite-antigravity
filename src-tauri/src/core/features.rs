@@ -4,12 +4,15 @@
 //! (translator, currency, clipboard, etc.) implements the `Feature` trait
 //! to provide widgets and actions to the command palette.
 
-use crate::types::{ActionType, CommandItem, ExecuteActionRequest, ExecuteActionResponse};
+use crate::shared::types::{ActionType, CommandItem, ExecuteActionRequest, ExecuteActionResponse};
+use crate::core::context::category::{get_action_category, get_widget_category};
 use std::collections::HashMap;
 
 pub mod translator;
 pub mod currency;
 pub mod clipboard;
+pub mod unit_converter;
+pub mod time_converter;
 
 /// Feature trait that all features must implement
 ///
@@ -59,16 +62,33 @@ pub fn get_all_features() -> Vec<Box<dyn Feature>> {
         Box::new(translator::TranslatorFeature),
         Box::new(currency::CurrencyFeature),
         Box::new(clipboard::ClipboardFeature),
+        Box::new(unit_converter::UnitConverter),
+        Box::new(time_converter::TimeConverterFeature),
     ]
 }
 
-/// Get all command items from all features
+/// Get all command items from all features with categories assigned
 pub fn get_all_command_items() -> Vec<CommandItem> {
     let mut items = vec![];
     
     for feature in get_all_features() {
-        items.extend(feature.widget_commands());
-        items.extend(feature.action_commands());
+        // Get widget commands and assign categories
+        let mut widget_cmds = feature.widget_commands();
+        for cmd in &mut widget_cmds {
+            if let Some(widget_type) = &cmd.widget_type {
+                cmd.category = get_widget_category(widget_type);
+            }
+        }
+        items.extend(widget_cmds);
+        
+        // Get action commands and assign categories
+        let mut action_cmds = feature.action_commands();
+        for cmd in &mut action_cmds {
+            if let Some(action_type) = &cmd.action_type {
+                cmd.category = get_action_category(action_type);
+            }
+        }
+        items.extend(action_cmds);
     }
     
     items

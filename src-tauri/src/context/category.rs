@@ -1,0 +1,301 @@
+//! Context category detection and mapping
+//!
+//! Provides scalable categorization system for content detection and action mapping.
+//! This serves as the single source of truth for category assignments.
+
+use crate::shared::types::ActionType;
+use regex::Regex;
+use serde::{Deserialize, Serialize};
+
+/// Context categories for content detection and action filtering
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContextCategory {
+    /// Length measurements (meters, feet, kilometers, etc.)
+    Length,
+    /// Mass/weight measurements (kilograms, pounds, grams, etc.)
+    Mass,
+    /// Volume measurements (liters, gallons, milliliters, etc.)
+    Volume,
+    /// Temperature measurements (Celsius, Fahrenheit, Kelvin)
+    Temperature,
+    /// Speed measurements (km/h, mph, m/s, etc.)
+    Speed,
+    /// Currency amounts (USD, EUR, GBP, etc.)
+    Currency,
+    /// Text content (for translation)
+    Text,
+    /// Time measurements (hours, minutes, seconds) - for future scalability
+    Time,
+    /// General/uncategorized content
+    General,
+}
+
+/// Detect content category from text using regex patterns
+/// 
+/// This is the scalable detection point - adding new categories only requires
+/// adding a regex pattern here, not touching the action mapping.
+pub fn detect_content_category(text: &str) -> Option<ContextCategory> {
+    let text_lower = text.to_lowercase();
+    
+    // Length patterns: numbers followed by length units
+    let length_patterns = vec![
+        r"\d+\.?\d*\s*(mm|cm|m|km|in|inch|inches|ft|foot|feet|yd|yard|yards|mi|mile|miles|millimeter|millimeters|centimeter|centimeters|meter|meters|kilometer|kilometers)",
+        r"(mm|cm|m|km|in|ft|yd|mi)\s*\d+\.?\d*",
+    ];
+    for pattern in length_patterns {
+        if let Ok(re) = Regex::new(pattern) {
+            if re.is_match(&text_lower) {
+                return Some(ContextCategory::Length);
+            }
+        }
+    }
+    
+    // Mass patterns: numbers followed by mass units
+    let mass_patterns = vec![
+        r"\d+\.?\d*\s*(mg|g|kg|oz|ounce|ounces|lb|lbs|pound|pounds|milligram|milligrams|gram|grams|kilogram|kilograms)",
+        r"(mg|g|kg|oz|lb)\s*\d+\.?\d*",
+    ];
+    for pattern in mass_patterns {
+        if let Ok(re) = Regex::new(pattern) {
+            if re.is_match(&text_lower) {
+                return Some(ContextCategory::Mass);
+            }
+        }
+    }
+    
+    // Volume patterns: numbers followed by volume units
+    let volume_patterns = vec![
+        r"\d+\.?\d*\s*(ml|l|liter|liters|litre|litres|fl-oz|floz|fluid\s*ounce|fluid\s*ounces|cup|cups|gal|gallon|gallons|milliliter|milliliters)",
+        r"(ml|l|fl-oz|cup|gal)\s*\d+\.?\d*",
+    ];
+    for pattern in volume_patterns {
+        if let Ok(re) = Regex::new(pattern) {
+            if re.is_match(&text_lower) {
+                return Some(ContextCategory::Volume);
+            }
+        }
+    }
+    
+    // Temperature patterns: numbers followed by temperature units
+    let temp_patterns = vec![
+        r"\d+\.?\d*\s*(c|celsius|f|fahrenheit|k|kelvin|°c|°f|°C|°F)",
+        r"(c|f|k|celsius|fahrenheit|kelvin)\s*\d+\.?\d*",
+    ];
+    for pattern in temp_patterns {
+        if let Ok(re) = Regex::new(pattern) {
+            if re.is_match(&text_lower) {
+                return Some(ContextCategory::Temperature);
+            }
+        }
+    }
+    
+    // Speed patterns: numbers followed by speed units
+    let speed_patterns = vec![
+        r"\d+\.?\d*\s*(km/h|kmh|kph|mph|m/h|kilometers?\s*per\s*hour|miles?\s*per\s*hour)",
+        r"(km/h|kmh|mph)\s*\d+\.?\d*",
+    ];
+    for pattern in speed_patterns {
+        if let Ok(re) = Regex::new(pattern) {
+            if re.is_match(&text_lower) {
+                return Some(ContextCategory::Speed);
+            }
+        }
+    }
+    
+    // Currency patterns: currency symbols or codes with numbers
+    let currency_patterns = vec![
+        r"[$€£¥]\s*\d+\.?\d*",
+        r"\d+\.?\d*\s*(usd|eur|gbp|jpy|aud|cad|chf|cny|inr|mxn|dollar|dollars|euro|euros|pound|pounds|yen)",
+        r"(usd|eur|gbp|jpy|aud|cad|chf|cny|inr|mxn)\s*\d+\.?\d*",
+    ];
+    for pattern in currency_patterns {
+        if let Ok(re) = Regex::new(pattern) {
+            if re.is_match(&text_lower) {
+                return Some(ContextCategory::Currency);
+            }
+        }
+    }
+    
+    // Time patterns: numbers followed by time units (for future scalability)
+    let time_patterns = vec![
+        r"\d+\.?\d*\s*(h|hr|hrs|hour|hours|m|min|mins|minute|minutes|s|sec|secs|second|seconds|ms|millisecond|milliseconds)",
+        r"(h|hr|min|sec|ms)\s*\d+\.?\d*",
+    ];
+    for pattern in time_patterns {
+        if let Ok(re) = Regex::new(pattern) {
+            if re.is_match(&text_lower) {
+                return Some(ContextCategory::Time);
+            }
+        }
+    }
+    
+    // Text detection: if it contains words (not just numbers/symbols)
+    // This is a fallback for translation actions
+    if text.chars().any(|c| c.is_alphabetic()) && text.len() > 2 {
+        return Some(ContextCategory::Text);
+    }
+    
+    None
+}
+
+/// Map ActionType to ContextCategory
+/// 
+/// This is the SCALABLE mapping point - adding new actions only requires
+/// adding a match arm here, not touching detection or frontend logic.
+pub fn get_action_category(action: &ActionType) -> Option<ContextCategory> {
+    match action {
+        // Translation actions → Text
+        ActionType::TranslateEn
+        | ActionType::TranslateZh
+        | ActionType::TranslateEs
+        | ActionType::TranslateFr
+        | ActionType::TranslateDe
+        | ActionType::TranslateAr
+        | ActionType::TranslatePt
+        | ActionType::TranslateRu
+        | ActionType::TranslateJa
+        | ActionType::TranslateHi
+        | ActionType::TranslateIt
+        | ActionType::TranslateNl
+        | ActionType::TranslatePl
+        | ActionType::TranslateTr
+        | ActionType::TranslateHy
+        | ActionType::TranslateFa
+        | ActionType::TranslateVi
+        | ActionType::TranslateId
+        | ActionType::TranslateKo
+        | ActionType::TranslateBn
+        | ActionType::TranslateUr
+        | ActionType::TranslateTh
+        | ActionType::TranslateSv
+        | ActionType::TranslateDa
+        | ActionType::TranslateFi
+        | ActionType::TranslateHu => Some(ContextCategory::Text),
+        
+        // Currency conversion actions → Currency
+        ActionType::ConvertUsd
+        | ActionType::ConvertEur
+        | ActionType::ConvertGbp
+        | ActionType::ConvertJpy
+        | ActionType::ConvertAud
+        | ActionType::ConvertCad
+        | ActionType::ConvertChf
+        | ActionType::ConvertCny
+        | ActionType::ConvertInr
+        | ActionType::ConvertMxn => Some(ContextCategory::Currency),
+        
+        // Length conversion actions → Length
+        ActionType::ConvertToMM
+        | ActionType::ConvertToCM
+        | ActionType::ConvertToM
+        | ActionType::ConvertToKM
+        | ActionType::ConvertToIN
+        | ActionType::ConvertToFT
+        | ActionType::ConvertToYD
+        | ActionType::ConvertToMI => Some(ContextCategory::Length),
+        
+        // Mass conversion actions → Mass
+        ActionType::ConvertToMG
+        | ActionType::ConvertToG
+        | ActionType::ConvertToKG
+        | ActionType::ConvertToOZ
+        | ActionType::ConvertToLB => Some(ContextCategory::Mass),
+        
+        // Volume conversion actions → Volume
+        ActionType::ConvertToML
+        | ActionType::ConvertToL
+        | ActionType::ConvertToFlOz
+        | ActionType::ConvertToCup
+        | ActionType::ConvertToPint
+        | ActionType::ConvertToQuart
+        | ActionType::ConvertToGal => Some(ContextCategory::Volume),
+        
+        // Temperature conversion actions → Temperature
+        ActionType::ConvertToC
+        | ActionType::ConvertToF
+        | ActionType::ConvertToK => Some(ContextCategory::Temperature),
+        
+        // Speed conversion actions → Speed
+        ActionType::ConvertToMS
+        | ActionType::ConvertToKMH
+        | ActionType::ConvertToMPH
+        | ActionType::ConvertToKnot => Some(ContextCategory::Speed),
+        
+        // Cross-category conversions (Volume to Mass) → Mass
+        ActionType::ConvertVolToG
+        | ActionType::ConvertVolToKG
+        | ActionType::ConvertVolToOZ
+        | ActionType::ConvertVolToLB => Some(ContextCategory::Mass),
+        
+        // Cross-category conversions (Mass to Volume) → Volume
+        ActionType::ConvertMassToML
+        | ActionType::ConvertMassToL
+        | ActionType::ConvertMassToFlOz
+        | ActionType::ConvertMassToCup
+        | ActionType::ConvertMassToPint
+        | ActionType::ConvertMassToQuart
+        | ActionType::ConvertMassToGal => Some(ContextCategory::Volume),
+    }
+}
+
+/// Get category for widget type
+pub fn get_widget_category(widget_type: &str) -> Option<ContextCategory> {
+    match widget_type {
+        "translator" => Some(ContextCategory::Text),
+        "currency" => Some(ContextCategory::Currency),
+        "unit_converter" => None, // Unit converter handles multiple categories
+        "clipboard" => None, // Clipboard is general
+        "settings" => None, // Settings is general
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_detect_length() {
+        assert_eq!(detect_content_category("12km"), Some(ContextCategory::Length));
+        assert_eq!(detect_content_category("100 meters"), Some(ContextCategory::Length));
+        assert_eq!(detect_content_category("5.5 ft"), Some(ContextCategory::Length));
+    }
+
+    #[test]
+    fn test_detect_mass() {
+        assert_eq!(detect_content_category("50kg"), Some(ContextCategory::Mass));
+        assert_eq!(detect_content_category("10 pounds"), Some(ContextCategory::Mass));
+    }
+
+    #[test]
+    fn test_detect_currency() {
+        assert_eq!(detect_content_category("$100"), Some(ContextCategory::Currency));
+        assert_eq!(detect_content_category("50 EUR"), Some(ContextCategory::Currency));
+    }
+
+    #[test]
+    fn test_detect_temperature() {
+        assert_eq!(detect_content_category("25C"), Some(ContextCategory::Temperature));
+        assert_eq!(detect_content_category("72 fahrenheit"), Some(ContextCategory::Temperature));
+    }
+
+    #[test]
+    fn test_get_action_category_currency() {
+        assert_eq!(get_action_category(&ActionType::ConvertUsd), Some(ContextCategory::Currency));
+        assert_eq!(get_action_category(&ActionType::ConvertEur), Some(ContextCategory::Currency));
+    }
+
+    #[test]
+    fn test_get_action_category_length() {
+        assert_eq!(get_action_category(&ActionType::ConvertToKM), Some(ContextCategory::Length));
+        assert_eq!(get_action_category(&ActionType::ConvertToM), Some(ContextCategory::Length));
+    }
+
+    #[test]
+    fn test_get_action_category_text() {
+        assert_eq!(get_action_category(&ActionType::TranslateEn), Some(ContextCategory::Text));
+        assert_eq!(get_action_category(&ActionType::TranslateIt), Some(ContextCategory::Text));
+    }
+}
+

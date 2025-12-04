@@ -83,7 +83,7 @@ impl ClipboardMonitor {
                                 drop(last);
 
                                 // Get the active app (source of the clipboard content)
-                                let source_app = crate::automation::get_active_app().ok();
+                                let source_app = crate::system::automation::macos::get_active_app().ok();
                                 
                                 // Add to history
                                 let item = ClipboardItem::new_text(current_content, source_app);

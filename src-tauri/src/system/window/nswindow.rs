@@ -138,7 +138,14 @@ where
     unsafe {
         // Create an Objective-C block that executes our closure
         let block = ConcreteBlock::new(move || {
-            if let Some(f) = closure.lock().unwrap().take() {
+            let mut guard = match closure.lock() {
+                Ok(g) => g,
+                Err(poisoned) => {
+                    eprintln!("[Window] Mutex poisoned, recovering: {}", poisoned);
+                    poisoned.into_inner()
+                }
+            };
+            if let Some(f) = guard.take() {
                 f();
             }
             let _ = tx.send(());
@@ -168,14 +175,21 @@ where
 /// 4. Shows the panel
 #[cfg(target_os = "macos")]
 pub fn convert_window_to_panel(window: &tauri::WebviewWindow) -> Result<(), String> {
-    use crate::panel::FloatingPanel;
+    use crate::system::window::panel::FloatingPanel;
     
     let (tx, rx) = mpsc::channel();
     let window_clone = window.clone();
     
     run_on_main_thread(move || {
         unsafe {
-            let ns_window = window_clone.ns_window().unwrap() as id;
+            let ns_window = match window_clone.ns_window() {
+                Ok(win) => win as id,
+                Err(e) => {
+                    eprintln!("[Window] Failed to get window handle: {}", e);
+                    let _ = tx.send(Err(format!("Window handle not available: {}", e)));
+                    return;
+                }
+            };
             
             println!("🔵 [DEBUG] [convert_to_panel] Converting Tauri NSWindow to NSPanel...");
             

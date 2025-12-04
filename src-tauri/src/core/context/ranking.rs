@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use crate::shared::types::CommandItem;
+use crate::core::context::category::{ContextCategory, get_action_category};
 
 /// Usage metrics for tracking command/action usage
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -157,6 +159,41 @@ pub fn rank_commands<T>(
 
     // Return sorted commands
     scored_commands.into_iter().map(|(cmd, _)| cmd).collect()
+}
+
+/// Score commands by context category - Soft Ranking (Weighted Sort)
+/// 
+/// Scoring System:
+/// - Score 100: Exact Context Match (e.g., Number → Math Action)
+/// - Score 50: Generic Match (System Actions, Widgets)
+/// - Score 10: Mismatch (e.g., Text → Currency Action)
+/// 
+/// Returns: Full list sorted by score DESC (nothing hidden)
+pub fn score_by_context(commands: Vec<CommandItem>, context: ContextCategory) -> Vec<(CommandItem, f64)> {
+    commands.into_iter().map(|cmd| {
+        let score = if let Some(action_type) = &cmd.action_type {
+            if let Some(action_category) = get_action_category(action_type) {
+                // Exact context match
+                if action_category == context {
+                    100.0
+                } else {
+                    // Mismatch - lower score
+                    10.0
+                }
+            } else {
+                // Unknown action type - generic score
+                50.0
+            }
+        } else if cmd.widget_type.is_some() {
+            // Widgets get generic score (they're always useful)
+            50.0
+        } else {
+            // No action or widget - generic score
+            50.0
+        };
+        
+        (cmd, score)
+    }).collect()
 }
 
 #[cfg(test)]

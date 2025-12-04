@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from "react";
-import { api } from "../api";
-import { Card } from "./ui/card";
-import { Separator } from "./ui/separator";
-import { Textarea } from "./ui/textarea";
-import { Combobox } from "./ui/combobox";
+import { api } from "../../logic/api/tauri";
+import { Card } from "../ui/card";
+import { Separator } from "../ui/separator";
+import { Textarea } from "../ui/textarea";
+import { Combobox } from "../ui/combobox";
+
 
 const LANGUAGE_NAMES: Record<string, string> = {
     en: "english",

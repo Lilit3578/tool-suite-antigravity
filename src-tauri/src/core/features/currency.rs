@@ -2,9 +2,9 @@
 //!
 //! Provides currency conversion with 10 major currencies.
 
-use crate::types::*;
-use crate::settings::AppSettings;
-use crate::context;
+use crate::shared::types::*;
+use crate::shared::settings::AppSettings;
+use crate::core::context;
 use super::Feature;
 use std::collections::HashMap;
 
@@ -22,6 +22,7 @@ impl Feature for CurrencyFeature {
             description: Some("Open currency converter widget".to_string()),
             action_type: None,
             widget_type: Some("currency".to_string()),
+            category: None, // Will be assigned in get_all_command_items()
         }]
     }
     
@@ -47,6 +48,7 @@ impl Feature for CurrencyFeature {
                 description: None,
                 action_type: Some(action_type),
                 widget_type: None,
+                category: None, // Will be assigned in get_all_command_items()
             })
             .collect()
     }

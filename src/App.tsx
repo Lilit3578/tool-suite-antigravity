@@ -1,11 +1,14 @@
 import { useEffect } from "react";
-import { useAppStore } from "./store";
-import { api } from "./api";
+import { useAppStore } from "./logic/state/store";
+import { api } from "./logic/api/tauri";
 import { CommandPalette } from "./components/CommandPalette";
-import { TranslatorWidget } from "./components/TranslatorWidget";
-import { CurrencyConverterWidget } from "./components/CurrencyConverterWidget";
-import { ClipboardHistoryWidget } from "./components/ClipboardHistoryWidget";
-import { SettingsWidget } from "./components/SettingsWidget";
+import { TranslatorWidget } from "./components/widgets/TranslatorWidget";
+import { CurrencyConverterWidget } from "./components/widgets/CurrencyConverterWidget";
+import { ClipboardHistoryWidget } from "./components/widgets/ClipboardHistoryWidget";
+import { SettingsWidget } from "./components/widgets/SettingsWidget";
+import { UnitConverterWidget } from "./components/widgets/UnitConverterWidget";
+import { TimeConverterWidget } from "./components/widgets/TimeConverterWidget";
+
 
 function App() {
   const { currentWidget, setCurrentWidget, setSettings } = useAppStore();
@@ -58,6 +61,10 @@ function App() {
       return <TranslatorWidget />;
     case "currency":
       return <CurrencyConverterWidget />;
+    case "unit_converter":
+      return <UnitConverterWidget />;
+    case "time_converter":
+      return <TimeConverterWidget />;
     case "clipboard":
       return <ClipboardHistoryWidget />;
     case "settings":

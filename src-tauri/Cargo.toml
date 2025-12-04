@@ -29,6 +29,8 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 tokio = { version = "1", features = ["full"] }
 directories = "5"
 chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.10"
+chrono-english = "0.1"
 urlencoding = "2.1"
 mouse_position = "0.1"
 uuid = { version = "1.11", features = ["v4", "serde"] }
@@ -40,3 +42,12 @@ cli-clipboard = "0.4"  # System-level clipboard access without app activation
 cocoa = "0.25"
 objc = "0.2"
 block = "0.1"
+once_cell = "1.19"
+
+# Workaround for Rust compiler ICE (Internal Compiler Error)
+# Disable incremental compilation to avoid compiler bug in check_mod_deathness
+[profile.dev]
+incremental = false
+
+[profile.release]
+incremental = false

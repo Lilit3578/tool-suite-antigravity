@@ -18,6 +18,14 @@ pub struct CurrencyInfo {
 
 /// Detect currency in text using regex patterns
 pub fn detect_currency(text: &str) -> Option<CurrencyInfo> {
+    // Truncate input to prevent DoS attacks from large text
+    const MAX_INPUT_LENGTH: usize = 1000;
+    let truncated_text = if text.len() > MAX_INPUT_LENGTH {
+        &text[..MAX_INPUT_LENGTH]
+    } else {
+        text
+    };
+    
     // Common currency patterns
     let patterns = vec![
         // $100, $1,234.56
@@ -50,7 +58,7 @@ pub fn detect_currency(text: &str) -> Option<CurrencyInfo> {
 
     for (pattern, currency_code) in patterns {
         if let Ok(re) = Regex::new(pattern) {
-            if let Some(captures) = re.captures(text) {
+            if let Some(captures) = re.captures(truncated_text) {
                 if let Some(amount_str) = captures.get(1) {
                     // Remove commas and parse
                     let cleaned = amount_str.as_str().replace(",", "");

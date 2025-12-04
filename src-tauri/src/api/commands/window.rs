@@ -2,8 +2,8 @@
 //!
 //! Handles window positioning, cursor detection, and window lifecycle.
 
-use crate::types::{CursorPosition, ScreenBounds, WindowPosition};
-use super::error::{format_window_error, CommandResult};
+use crate::shared::types::{CursorPosition, ScreenBounds, WindowPosition};
+use crate::api::error::{format_window_error, CommandResult};
 use tauri::Manager;
 
 /// Get the current cursor position

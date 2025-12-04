@@ -4,10 +4,10 @@
 //! action execution, and usage tracking. Feature-specific logic is delegated
 //! to the features module.
 
-use crate::types::*;
-use crate::automation;
-use crate::context;
-use crate::features;
+use crate::shared::types::*;
+use crate::system::automation;
+use crate::core::context;
+use crate::core::features;
 use tauri::Manager;
 use tauri_plugin_clipboard_manager::ClipboardExt;
 

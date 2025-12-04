@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import { Languages, DollarSign, Settings, Zap } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { api } from "../api";
-import type { CommandItem } from "../types";
+import { api } from "../logic/api/tauri";
+import type { CommandItem } from "../logic/types";
 import {
     Command,
     CommandEmpty,
@@ -19,7 +19,7 @@ import {
     PopoverTrigger,
 } from "./ui/popover";
 import { Button } from "./ui/button";
-import { useAppStore } from "../store"; // ← Import Zustand store
+import { useAppStore } from "../logic/state/store"; // ← Import Zustand store
 
 export function CommandPalette() {
     // ✅ Use Zustand store for query instead of local state
@@ -48,7 +48,7 @@ export function CommandPalette() {
             console.log("🔵 [DEBUG] [CommandPalette] document.hasFocus():", document.hasFocus());
             console.log("🔵 [DEBUG] [CommandPalette] document.activeElement:", document.activeElement);
             console.log("🔵 [DEBUG] [CommandPalette] inputRef.current:", inputRef.current);
-            
+
             resetPalette(); // ← Clear search query and selection
 
             // Also reset local transient state
@@ -58,7 +58,7 @@ export function CommandPalette() {
             setIsError(false);
             setIsExecuting(false);
             setExecutingActionId(null);
-            
+
             // Try to focus input
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
@@ -72,7 +72,7 @@ export function CommandPalette() {
                 });
             });
         };
-        
+
         const handleWindowBlur = () => {
             console.log("🔴 [DEBUG] [CommandPalette] ========== WINDOW BLUR EVENT ==========");
             console.log("🔴 [DEBUG] [CommandPalette] Window lost focus");
@@ -126,13 +126,13 @@ export function CommandPalette() {
             console.log("🔵 [DEBUG] [CommandPalette]   - document.hasFocus():", document.hasFocus());
             console.log("🔵 [DEBUG] [CommandPalette]   - document.activeElement:", document.activeElement);
             console.log("🔵 [DEBUG] [CommandPalette]   - inputRef.current:", inputRef.current);
-            
+
             try {
                 const window = getCurrentWindow();
                 console.log("🔵 [DEBUG] [CommandPalette] Calling window.setFocus()...");
                 await window.setFocus();
                 console.log("🔵 [DEBUG] [CommandPalette] ✓ window.setFocus() completed");
-                
+
                 // Check state after setFocus
                 console.log("🔵 [DEBUG] [CommandPalette] State after setFocus():");
                 console.log("🔵 [DEBUG] [CommandPalette]   - document.hasFocus():", document.hasFocus());
@@ -179,7 +179,8 @@ export function CommandPalette() {
         const loadCommands = async () => {
             setIsLoadingCommands(true);
             try {
-                const items = await api.getCommandItems(capturedText || undefined);
+                const response = await api.getCommandItems(capturedText || undefined);
+                const items = Array.isArray(response) ? response : response.commands;
                 setCommands(items);
             } catch (e) {
                 console.error("Failed to load commands:", e);
@@ -313,7 +314,7 @@ export function CommandPalette() {
 
 
     // Action execution with popover
-    async function handleExecuteAction(actionId: string, actionType: string) {
+    async function handleExecuteAction(actionId: string, actionType: import("../logic/types").ActionType) {
         setSelectedActionId(actionId);
         setIsError(false);
         setIsExecuting(true);
@@ -350,7 +351,7 @@ export function CommandPalette() {
             setPopoverOpen(true);
 
             const result = await api.executeAction({
-                action_type: actionType as any,
+                action_type: actionType,
                 params: {
                     text: textToUse,
                 },
@@ -383,10 +384,10 @@ export function CommandPalette() {
     }
 
     const getIcon = (command: CommandItem) => {
-        if (command.widget_type === 'translator' || command.action_type?.startsWith('translate_')) {
+        if (command.widget_type === 'translator' || (typeof command.action_type === 'string' && command.action_type.startsWith('translate_'))) {
             return <Languages className="w-4 h-4" />;
         }
-        if (command.widget_type === 'currency' || command.action_type?.startsWith('convert_')) {
+        if (command.widget_type === 'currency' || (typeof command.action_type === 'string' && command.action_type.startsWith('convert_'))) {
             return <DollarSign className="w-4 h-4" />;
         }
         if (command.widget_type === 'settings') {

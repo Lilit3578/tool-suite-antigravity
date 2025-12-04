@@ -1,14 +1,15 @@
 import { useEffect, useState, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { api } from "../api";
-import type { ClipboardItem } from "../types";
+import { api } from "../../logic/api/tauri";
+import type { ClipboardItem } from "../../logic/types";
 import {
     Command,
     CommandGroup,
     CommandItem,
     CommandList,
-} from "./ui/command";
+} from "../ui/command";
+
 import { Clipboard } from "lucide-react";
 
 export function ClipboardHistoryWidget() {
@@ -56,12 +57,19 @@ export function ClipboardHistoryWidget() {
         return () => clearTimeout(timer);
     }, [items]);
 
+    const pasteTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
     // Handle item selection and auto-paste
     const handleSelect = async (itemId: string) => {
         // Prevent multiple simultaneous paste operations
         if (isPastingRef.current) {
             console.log('[ClipboardHistory] Paste already in progress, ignoring');
             return;
+        }
+
+        // Clear any existing timeout
+        if (pasteTimeoutRef.current) {
+            clearTimeout(pasteTimeoutRef.current);
         }
 
         isPastingRef.current = true;
@@ -72,11 +80,21 @@ export function ClipboardHistoryWidget() {
         } catch (error) {
             console.error('[ClipboardHistory] Error pasting:', error);
         } finally {
-            setTimeout(() => {
+            pasteTimeoutRef.current = setTimeout(() => {
                 isPastingRef.current = false;
+                pasteTimeoutRef.current = null;
             }, 500);
         }
     };
+
+    // Cleanup paste timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (pasteTimeoutRef.current) {
+                clearTimeout(pasteTimeoutRef.current);
+            }
+        };
+    }, []);
 
     // Keyboard shortcuts: 1-5 for quick selection
     useEffect(() => {

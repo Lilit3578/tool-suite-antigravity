@@ -55,6 +55,19 @@ export interface ConvertCurrencyResponse {
     timestamp: string;
 }
 
+export interface ConvertUnitsRequest {
+    amount: number;
+    from_unit: string;
+    to_unit: string;
+    material?: string;
+}
+
+export interface ConvertUnitsResponse {
+    result: number;
+    from_unit: string;
+    to_unit: string;
+}
+
 export interface LogRequest {
     level: string;
     message: string;
@@ -99,14 +112,107 @@ export type ActionType =
     | 'convert_chf'
     | 'convert_cny'
     | 'convert_inr'
-    | 'convert_mxn';
+    | 'convert_mxn'
+    // Unit conversion actions - Length (8)
+    | 'convert_to_mm'
+    | 'convert_to_cm'
+    | 'convert_to_m'
+    | 'convert_to_km'
+    | 'convert_to_in'
+    | 'convert_to_ft'
+    | 'convert_to_yd'
+    | 'convert_to_mi'
+    // Unit conversion actions - Mass (5)
+    | 'convert_to_mg'
+    | 'convert_to_g'
+    | 'convert_to_kg'
+    | 'convert_to_oz'
+    | 'convert_to_lb'
+    // Unit conversion actions - Volume (7)
+    | 'convert_to_ml'
+    | 'convert_to_l'
+    | 'convert_to_fl_oz'
+    | 'convert_to_cup'
+    | 'convert_to_pint'
+    | 'convert_to_quart'
+    | 'convert_to_gal'
+    // Unit conversion actions - Temperature (3)
+    | 'convert_to_c'
+    | 'convert_to_f'
+    | 'convert_to_k'
+    // Unit conversion actions - Speed (4)
+    | 'convert_to_ms'
+    | 'convert_to_kmh'
+    | 'convert_to_mph'
+    | 'convert_to_knot'
+    // Cross-category conversions - Volume to Mass (4)
+    | 'convert_vol_to_g'
+    | 'convert_vol_to_kg'
+    | 'convert_vol_to_oz'
+    | 'convert_vol_to_lb'
+    // Cross-category conversions - Mass to Volume (7)
+    | 'convert_mass_to_ml'
+    | 'convert_mass_to_l'
+    | 'convert_mass_to_fl_oz'
+    | 'convert_mass_to_cup'
+    | 'convert_mass_to_pint'
+    | 'convert_mass_to_quart'
+    | 'convert_mass_to_gal'
+    // Time zone conversion - polymorphic variant
+    | { convert_time: string };  // Carries timezone ID
+
+export interface ConvertTimeRequest {
+    time_input: string;
+    target_timezone: string;
+    source_timezone?: string;
+}
+
+export interface ConvertTimeResponse {
+    source_time: string;
+    target_time: string;
+    offset_description: string;
+    source_timezone: string;
+    target_timezone: string;
+
+    // Enhanced fields
+    target_utc_offset: string;
+    target_zone_abbr: string;
+    relative_offset: string;
+    date_change_indicator?: string;
+    source_zone_abbr: string;
+    source_utc_offset: string;
+}
+
+export interface TimezoneInfo {
+    label: string;
+    iana_id: string;
+    keywords: string;
+}
+
+export interface ParsedTimeInput {
+    time_input: string;
+    source_timezone?: string;
+}
+
+export type ContextCategory =
+    | "length"
+    | "mass"
+    | "volume"
+    | "temperature"
+    | "speed"
+    | "currency"
+    | "text"
+    | "time"
+    | "general";
 
 export interface CommandItem {
     id: string;
     label: string;
     description?: string;
+    keywords?: string[];  // Hidden keywords for search matching
     action_type?: ActionType;
     widget_type?: string;
+    category?: ContextCategory;  // Context category for filtering/boosting
 }
 
 export interface ExecuteActionRequest {

@@ -2,9 +2,9 @@
 //!
 //! Provides clipboard history management and paste automation.
 
-use crate::types::*;
-use crate::clipboard::{ClipboardHistory, ClipboardItem, ClipboardMonitor};
-use crate::automation;
+use crate::shared::types::*;
+use crate::core::clipboard::{ClipboardHistory, ClipboardItem, ClipboardMonitor};
+use crate::system::automation;
 use super::Feature;
 use tauri::Manager;
 use std::sync::{Arc, Mutex};
@@ -23,6 +23,7 @@ impl Feature for ClipboardFeature {
             description: Some("View and paste from clipboard history".to_string()),
             action_type: None,
             widget_type: Some("clipboard".to_string()),
+            category: None, // Will be assigned in get_all_command_items()
         }]
     }
     

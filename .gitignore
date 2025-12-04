@@ -1,0 +1,74 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+dist/
+dist-ssr/
+*.local
+
+# Tauri build outputs
+src-tauri/target/
+src-tauri/WixTools/
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.development
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*~
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Debug files
+*.tsbuildinfo
+
+# Rust
+**/*.rs.bk
+Cargo.lock
+
+# macOS
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Production artifacts (keep in git for deployment)
+# Uncomment if you don't want to commit build artifacts
+# /dist
+
+# Brain/artifacts directory (AI assistant artifacts)
+.gemini/
