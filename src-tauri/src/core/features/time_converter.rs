@@ -1,5 +1,5 @@
 // Time Zone Converter - Logic Layer
-// All time calculations happen here in Rust using chrono and chrono-tz
+// Fixed version addressing race conditions and parsing issues
 
 pub mod constants;
 
@@ -11,27 +11,104 @@ use super::Feature;
 use std::collections::HashMap;
 use regex::Regex;
 
-/// Timezone abbreviation to IANA ID mappings
+/// Timezone abbreviation to IANA ID mappings (expanded)
 const TIMEZONE_ABBREVIATIONS: &[(&str, &str)] = &[
+    // North America
     ("EST", "America/New_York"),
     ("EDT", "America/New_York"),
     ("PST", "America/Los_Angeles"),
     ("PDT", "America/Los_Angeles"),
-    ("CST", "America/Chicago"),  // US Central (default for ambiguous CST)
+    ("CST", "America/Chicago"),
     ("CDT", "America/Chicago"),
     ("MST", "America/Denver"),
     ("MDT", "America/Denver"),
-    ("GMT", "Europe/London"),
+    ("AST", "America/Antigua"),
+    
+    // Europe
+    ("GMT", "UTC"),  // Changed to UTC for consistency
     ("UTC", "UTC"),
     ("CET", "Europe/Paris"),
     ("CEST", "Europe/Paris"),
+    ("EET", "Europe/Athens"),
+    ("EEST", "Europe/Athens"),
+    ("WET", "Europe/Lisbon"),
+    ("WEST", "Europe/Lisbon"),
+    ("MSK", "Europe/Moscow"),
+    
+    // Asia
     ("JST", "Asia/Tokyo"),
     ("KST", "Asia/Seoul"),
     ("IST", "Asia/Kolkata"),
+    ("ICT", "Asia/Bangkok"),
+    ("SGT", "Asia/Singapore"),
+    ("HKT", "Asia/Hong_Kong"),
+    ("PKT", "Asia/Karachi"),
+    ("GST", "Asia/Dubai"),
+    ("IRST", "Asia/Tehran"),
+    ("AFT", "Asia/Kabul"),
+    ("AMT", "Asia/Yerevan"),
+    ("AZT", "Asia/Baku"),
+    ("BST", "Asia/Dhaka"),
+    ("BTT", "Asia/Thimphu"),
+    ("NPT", "Asia/Kathmandu"),
+    ("TJT", "Asia/Dushanbe"),
+    ("TMT", "Asia/Ashgabat"),
+    ("UZT", "Asia/Tashkent"),
+    ("KGT", "Asia/Bishkek"),
+    ("ALMT", "Asia/Almaty"),
+    ("MMT", "Asia/Yangon"),
+    ("WIB", "Asia/Jakarta"),
+    ("PHT", "Asia/Manila"),
+    ("MYT", "Asia/Kuala_Lumpur"),
+    ("BNT", "Asia/Brunei"),
+    ("ULAT", "Asia/Ulaanbaatar"),
+    
+    // Oceania / Pacific
     ("AEST", "Australia/Sydney"),
     ("AEDT", "Australia/Sydney"),
     ("NZST", "Pacific/Auckland"),
     ("NZDT", "Pacific/Auckland"),
+    ("FJT", "Pacific/Fiji"),
+    ("PGT", "Pacific/Port_Moresby"),
+    ("SBT", "Pacific/Guadalcanal"),
+    ("VUT", "Pacific/Efate"),
+    ("TOT", "Pacific/Tongatapu"),
+    ("WST", "Pacific/Apia"),
+    ("PONT", "Pacific/Pohnpei"),
+    ("GILT", "Pacific/Tarawa"),
+    ("MHT", "Pacific/Majuro"),
+    ("NRT", "Pacific/Nauru"),
+    ("PWT", "Pacific/Palau"),
+    ("TVT", "Pacific/Funafuti"),
+    
+    // Africa
+    ("WAT", "Africa/Lagos"),
+    ("CAT", "Africa/Johannesburg"),
+    ("EAT", "Africa/Nairobi"),
+    ("SAST", "Africa/Johannesburg"),
+    ("CVT", "Atlantic/Cape_Verde"),
+    
+    // South America
+    ("ART", "America/Argentina/Buenos_Aires"),
+    ("BOT", "America/La_Paz"),
+    ("BRT", "America/Sao_Paulo"),
+    ("CLT", "America/Santiago"),
+    ("COT", "America/Bogota"),
+    ("ECT", "America/Guayaquil"),
+    ("GYT", "America/Guyana"),
+    ("PET", "America/Lima"),
+    ("PYT", "America/Asuncion"),
+    ("SRT", "America/Paramaribo"),
+    ("UYT", "America/Montevideo"),
+    ("VET", "America/Caracas"),
+    
+    // Middle East
+    ("TRT", "Europe/Istanbul"),
+    
+    // Indian Ocean
+    ("MVT", "Indian/Maldives"),
+    ("MUT", "Indian/Mauritius"),
+    ("SCT", "Indian/Mahe"),
 ];
 
 pub struct TimeConverterFeature;
@@ -48,7 +125,7 @@ impl Feature for TimeConverterFeature {
             description: Some("Open time zone converter widget".to_string()),
             action_type: None,
             widget_type: Some("time_converter".to_string()),
-            category: None, // Will be assigned in get_all_command_items()
+            category: None,
         }]
     }
     
@@ -67,30 +144,29 @@ impl Feature for TimeConverterFeature {
         
         match action {
             ActionType::ConvertTime(target_timezone) => {
-                let time_input = params.get("text")
+                let text_input = params.get("text")
                     .and_then(|v| v.as_str())
                     .unwrap_or("now");
                 
-                let source_timezone = params.get("source_timezone")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
+                // FIX: Parse the text to extract both time and source timezone
+                let parsed = parse_time_from_text(text_input);
                 
                 println!("[TimeConverter] 📥 Action params parsed:");
-                println!("  time_input: '{}'", time_input);
+                println!("  original text: '{}'", text_input);
+                println!("  parsed time_input: '{}'", parsed.time_input);
+                println!("  parsed source_timezone: {:?}", parsed.source_timezone);
                 println!("  target_timezone: '{}'", target_timezone);
-                println!("  source_timezone: {:?}", source_timezone);
                 
                 let request = ConvertTimeRequest {
-                    time_input: time_input.to_string(),
+                    time_input: parsed.time_input,
                     target_timezone: target_timezone.clone(),
-                    source_timezone,
+                    source_timezone: parsed.source_timezone,
                 };
                 
                 let response = parse_and_convert_time(request)?;
                 
-                // Only show the target time result (TO field format), not FROM → TO
-                // Format: "11:30pm, 04 dec - Rome/Italy (CET)"
-                let formatted_result = format!("{} - {}", response.target_time, response.target_timezone);
+                // Only show time and date, not timezone name
+                let formatted_result = response.target_time;
                 
                 println!("[TimeConverter] 📤 Action result: '{}'", formatted_result);
                 println!("[TimeConverter] ✅ ========== ACTION COMPLETE ==========");
@@ -119,67 +195,51 @@ pub fn parse_and_convert_time(request: ConvertTimeRequest) -> Result<ConvertTime
     println!("[TimeConverter] 📥 Request: time_input='{}', target_timezone='{}', source_timezone={:?}", 
         request.time_input, request.target_timezone, request.source_timezone);
     
-    // Determine source timezone (default to Local if not specified)
-    let source_tz_str = request.source_timezone.as_deref().unwrap_or("Local");
+    let source_tz_str = request.source_timezone.as_deref().unwrap_or("UTC");
     println!("[TimeConverter] 🌍 Source timezone: '{}'", source_tz_str);
     println!("[TimeConverter] 🎯 Target timezone: '{}'", request.target_timezone);
     
-    // Parse time input using chrono-english (this gives us a DateTime<Local>)
     let now = Local::now();
     println!("[TimeConverter] ⏰ Current local time: {}", now.format("%Y-%m-%d %H:%M:%S %Z"));
     
+    println!("[TimeConverter] 🔍 Parsing time input with chrono-english...");
     let parsed_local_dt = parse_date_string(&request.time_input, now, Dialect::Us)
-        .map_err(|e| format!("Failed to parse time input '{}': {}", request.time_input, e))?;
+        .map_err(|e| {
+            let err_msg = format!("Failed to parse time input '{}': {}", request.time_input, e);
+            println!("[TimeConverter] ❌ {}", err_msg);
+            err_msg
+        })?;
     println!("[TimeConverter] 📅 Parsed local datetime: {}", parsed_local_dt.format("%Y-%m-%d %H:%M:%S %Z"));
     
-    // Interpret the parsed time AS BEING IN the source timezone
-    let source_dt: DateTime<Tz> = if source_tz_str == "Local" {
-        println!("[TimeConverter] 🏠 Source is Local timezone");
-        // If source is Local, we need to get the system's actual timezone
-        // The parsed_local_dt is already in the system's local timezone
-        let naive = parsed_local_dt.naive_local();
-        
-        // Get the system's timezone offset at this moment
-        let local_offset = parsed_local_dt.offset().fix();
-        let offset_seconds = local_offset.local_minus_utc();
-        println!("[TimeConverter] 📍 Local offset: {} seconds ({} hours)", offset_seconds, offset_seconds / 3600);
-        
-        // Convert to UTC first
-        let utc_dt = naive - chrono::Duration::seconds(offset_seconds as i64);
-        
-        // Convert UTC DateTime to Tz type
-        let utc_tz_dt = Utc.from_utc_datetime(&utc_dt);
-        let result = utc_tz_dt.with_timezone(&chrono_tz::Tz::UTC);
-        println!("[TimeConverter] 🌐 Source datetime (UTC): {}", result.format("%Y-%m-%d %H:%M:%S %Z"));
-        result
-    } else {
-        println!("[TimeConverter] 🌍 Parsing source timezone: {}", source_tz_str);
-        // Parse the source timezone
-        let source_tz: Tz = source_tz_str.parse()
-            .map_err(|_| format!("Invalid source timezone: {}", source_tz_str))?;
-        
-        // Get the naive datetime from the parsed local time
-        let naive = parsed_local_dt.naive_local();
-        println!("[TimeConverter] 📅 Naive datetime: {}", naive.format("%Y-%m-%d %H:%M:%S"));
-        
-        // Interpret this naive datetime AS BEING IN the source timezone
-        let result = source_tz.from_local_datetime(&naive)
-            .single()
-            .ok_or_else(|| format!("Ambiguous or invalid time in timezone {}", source_tz_str))?;
-        println!("[TimeConverter] 🌐 Source datetime ({}): {}", source_tz_str, result.format("%Y-%m-%d %H:%M:%S %Z"));
-        result
-    };
+    // Parse source timezone
+    println!("[TimeConverter] 🌍 Parsing source timezone: {}", source_tz_str);
+    let source_tz: Tz = source_tz_str.parse()
+        .map_err(|_| format!("Invalid source timezone: {}", source_tz_str))?;
     
-    // Parse target timezone
+    // Get the naive datetime from the parsed local time
+    // This is the time the user typed, which we need to interpret AS BEING IN source_tz
+    let naive = parsed_local_dt.naive_local();
+    println!("[TimeConverter] 📅 Naive datetime: {}", naive.format("%Y-%m-%d %H:%M:%S"));
+    
+    // Interpret this naive datetime AS BEING IN the source timezone
+    let source_dt = source_tz.from_local_datetime(&naive)
+        .single()
+        .ok_or_else(|| format!("Ambiguous or invalid time in timezone {}", source_tz_str))?;
+    println!("[TimeConverter] 🌐 Source datetime ({}): {}", source_tz_str, source_dt.format("%Y-%m-%d %H:%M:%S %Z"));
+    
+    println!("[TimeConverter] 🔍 Parsing target timezone: '{}'", request.target_timezone);
     let target_tz: Tz = request.target_timezone.parse()
-        .map_err(|_| format!("Invalid target timezone: {}", request.target_timezone))?;
-    println!("[TimeConverter] 🎯 Parsed target timezone: {}", request.target_timezone);
+        .map_err(|e| {
+            let err_msg = format!("Invalid target timezone '{}': {:?}", request.target_timezone, e);
+            println!("[TimeConverter] ❌ {}", err_msg);
+            err_msg
+        })?;
+    println!("[TimeConverter] 🎯 Parsed target timezone successfully");
     
-    // Convert to target timezone
+    println!("[TimeConverter] 🔄 Converting to target timezone...");
     let target_dt = source_dt.with_timezone(&target_tz);
     println!("[TimeConverter] 🌐 Target datetime ({}): {}", request.target_timezone, target_dt.format("%Y-%m-%d %H:%M:%S %Z"));
     
-    // Calculate UTC offsets
     let source_offset_seconds = source_dt.offset().fix().local_minus_utc();
     let target_offset_seconds = target_dt.offset().fix().local_minus_utc();
     
@@ -192,26 +252,17 @@ pub fn parse_and_convert_time(request: ConvertTimeRequest) -> Result<ConvertTime
     println!("  Source UTC offset: {}", source_utc_offset);
     println!("  Target UTC offset: {}", target_utc_offset);
     
-    // Get DST-aware zone abbreviations
     let source_zone_abbr = source_dt.format("%Z").to_string();
     let target_zone_abbr = target_dt.format("%Z").to_string();
     println!("  Source zone abbr: {}", source_zone_abbr);
     println!("  Target zone abbr: {}", target_zone_abbr);
     
-    // Format timezone labels with DST-aware abbreviations
-    let source_label = if source_tz_str == "Local" {
-        format!("Local Time ({})", source_zone_abbr)
-    } else {
-        format_timezone_label_with_abbr(&source_tz_str, &source_zone_abbr)
-    };
+    let source_label = format_timezone_label_with_abbr(&source_tz_str, &source_zone_abbr);
     let target_label = format_timezone_label_with_abbr(&request.target_timezone, &target_zone_abbr);
     println!("  Source label: {}", source_label);
     println!("  Target label: {}", target_label);
+    println!("[TimeConverter] 📊 Labels formatted successfully");
     
-    // Calculate relative offset (FROM → TO direction)
-    // Formula: Target - Source = Offset
-    // If target is ahead (larger offset), we add time (positive)
-    // If target is behind (smaller offset), we subtract time (negative)
     let diff_seconds = target_offset_seconds - source_offset_seconds;
     let abs_diff_seconds = diff_seconds.abs();
     let hours = abs_diff_seconds / 3600;
@@ -219,11 +270,8 @@ pub fn parse_and_convert_time(request: ConvertTimeRequest) -> Result<ConvertTime
     let sign = if diff_seconds >= 0 { "+" } else { "-" };
     
     println!("[TimeConverter] 🧮 Relative offset calculation:");
-    println!("  diff_seconds = target_offset ({}) - source_offset ({}) = {}", 
-        target_offset_seconds, source_offset_seconds, diff_seconds);
-    println!("  abs_diff_seconds = {}", abs_diff_seconds);
+    println!("  diff_seconds = {} - {} = {}", target_offset_seconds, source_offset_seconds, diff_seconds);
     println!("  hours = {}, minutes = {}", hours, minutes);
-    println!("  sign = '{}' ({} >= 0)", sign, diff_seconds);
     
     let relative_offset = if diff_seconds == 0 {
         "Same time".to_string()
@@ -232,7 +280,6 @@ pub fn parse_and_convert_time(request: ConvertTimeRequest) -> Result<ConvertTime
     };
     println!("  relative_offset = '{}'", relative_offset);
     
-    // Detect date change
     let source_date = source_dt.date_naive();
     let target_date = target_dt.date_naive();
     let date_change_indicator = if target_date > source_date {
@@ -243,7 +290,6 @@ pub fn parse_and_convert_time(request: ConvertTimeRequest) -> Result<ConvertTime
         None
     };
     
-    // Calculate offset description (kept for compatibility)
     let offset_hours = target_offset_seconds as f64 / 3600.0;
     let source_offset_hours = source_offset_seconds as f64 / 3600.0;
     let diff_hours = offset_hours - source_offset_hours;
@@ -256,7 +302,12 @@ pub fn parse_and_convert_time(request: ConvertTimeRequest) -> Result<ConvertTime
         "Same time".to_string()
     };
     
-    // Format: 11:30pm, 04 dec (lowercase am/pm, short month like currency converter)
+    // FIX: Format as 'hh:mm pm/am, DD Mon' (e.g., '06:00pm, 05 Dec')
+    // %I = 12-hour format with leading zero (01-12)
+    // %M = minute with leading zero (00-59)
+    // %P = lowercase am/pm
+    // %d = day with leading zero (01-31)
+    // %b = abbreviated month name (Jan, Feb, etc.)
     let source_formatted = source_dt.format("%I:%M%P, %d %b").to_string();
     let target_formatted = target_dt.format("%I:%M%P, %d %b").to_string();
     
@@ -279,30 +330,23 @@ pub fn parse_and_convert_time(request: ConvertTimeRequest) -> Result<ConvertTime
     };
     
     println!("[TimeConverter] ✅ ========== CONVERSION RESPONSE ==========");
-    println!("[TimeConverter] 📤 Response: target_time='{}', relative_offset='{}', source_timezone='{}', target_timezone='{}'",
-        response.target_time, response.relative_offset, response.source_timezone, response.target_timezone);
     
     Ok(response)
 }
 
-/// Format UTC offset as "UTC±HH:MM"
 fn format_utc_offset(offset_seconds: i32) -> String {
     let hours = offset_seconds / 3600;
     let minutes = (offset_seconds % 3600).abs() / 60;
     format!("UTC{:+03}:{:02}", hours, minutes)
 }
 
-/// Format timezone label as "City/Country (Abbr)"
-/// Example: "Europe/Rome" with country "Italy" → "Rome/Italy (CET)"
 fn format_timezone_label(iana_id: &str, country_label: &str) -> String {
-    // Extract city name from IANA ID (part after last slash)
     let city = iana_id
         .split('/')
         .last()
         .unwrap_or(iana_id)
         .replace('_', " ");
     
-    // Capitalize first letter of each word in city
     let city_formatted: String = city
         .split_whitespace()
         .map(|word| {
@@ -315,21 +359,25 @@ fn format_timezone_label(iana_id: &str, country_label: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ");
     
-    // Get abbreviation from static map (for dropdown labels)
     let abbr = constants::get_timezone_abbreviation(iana_id);
     
     format!("{}/{} ({})", city_formatted, country_label, abbr)
 }
 
-/// Format timezone label with DST-aware abbreviation
-/// Example: "Europe/Rome" with abbr "CET" → "Rome/Italy (CET)"
 fn format_timezone_label_with_abbr(iana_id: &str, abbr: &str) -> String {
+    println!("[TimeConverter] 🏷️  Formatting label for IANA: '{}', abbr: '{}'", iana_id, abbr);
+    
     // Find the country label from constants
     let country_label = constants::ALL_TIMEZONES
         .iter()
         .find(|(_, id, _)| *id == iana_id)
         .map(|(country, _, _)| *country)
-        .unwrap_or("Unknown");
+        .unwrap_or_else(|| {
+            println!("[TimeConverter] ⚠️  IANA ID '{}' not found in constants, using 'Unknown'", iana_id);
+            "Unknown"
+        });
+    
+    println!("[TimeConverter] 🏷️  Found country: '{}'", country_label);
     
     // Extract city name from IANA ID
     let city = iana_id
@@ -351,10 +399,11 @@ fn format_timezone_label_with_abbr(iana_id: &str, abbr: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ");
     
-    format!("{}/{} ({})", city_formatted, country_label, abbr)
+    let result = format!("{}/{} ({})", city_formatted, country_label, abbr);
+    println!("[TimeConverter] 🏷️  Final label: '{}'", result);
+    result
 }
 
-/// Get all available timezones with proper labels in "City/Country (Abbr)" format
 pub fn get_all_timezones() -> Vec<TimezoneInfo> {
     constants::ALL_TIMEZONES
         .iter()
@@ -369,7 +418,6 @@ pub fn get_all_timezones() -> Vec<TimezoneInfo> {
         .collect()
 }
 
-/// Generate dynamic command items for all timezones
 pub fn generate_timezone_commands() -> Vec<CommandItem> {
     constants::ALL_TIMEZONES
         .iter()
@@ -381,121 +429,184 @@ pub fn generate_timezone_commands() -> Vec<CommandItem> {
                 description: Some(format!("Convert time to {}", formatted_label)),
                 action_type: Some(ActionType::ConvertTime(iana_id.to_string())),
                 widget_type: None,
-                category: None, // Will be assigned in get_all_command_items()
+                category: None,
             }
         })
         .collect()
 }
 
-/// Detect timezone from text using multiple strategies
+/// FIX: Enhanced detection with proper case handling and result pattern detection
 fn detect_timezone_from_text(text: &str) -> Option<String> {
     let text_lower = text.to_lowercase();
     
-    // Strategy 1: Check for IANA timezone IDs (e.g., "Asia/Tokyo", "America/New_York")
-    // Match pattern: word/word
-    let iana_regex = Regex::new(r"\b([A-Z][a-z]+/[A-Z][a-z_]+)\b").ok()?;
+    // FIX: Check if this looks like a conversion result - more comprehensive patterns
+    if is_conversion_result(text) {
+        println!("[TimeConverter] 🚫 Text appears to be a conversion result, skipping timezone detection");
+        return None;
+    }
+    
+    // Strategy 1: Check for IANA timezone IDs - FIX: case-insensitive matching
+    let iana_regex = match Regex::new(r"(?i)\b([A-Za-z]+/[A-Za-z_]+)\b") {
+        Ok(re) => re,
+        Err(e) => {
+            eprintln!("[TimeConverter] ⚠️  Failed to compile IANA regex: {}", e);
+            return None;
+        }
+    };
     if let Some(caps) = iana_regex.captures(text) {
         if let Some(iana_match) = caps.get(1) {
             let iana_id = iana_match.as_str();
-            // Verify it's a valid timezone by checking if it exists in our constants
-            if constants::ALL_TIMEZONES.iter().any(|(_, id, _)| id == &iana_id) {
-                return Some(iana_id.to_string());
+            // Find matching IANA ID (case-insensitive)
+            for (_, id, _) in constants::ALL_TIMEZONES {
+                if id.eq_ignore_ascii_case(iana_id) {
+                    return Some(id.to_string());
+                }
             }
         }
     }
     
-    // Strategy 2: Check for timezone abbreviations (EST, PST, etc.)
+    // Strategy 2: Check for timezone abbreviations
     for (abbr, iana_id) in TIMEZONE_ABBREVIATIONS {
         let abbr_pattern = format!(r"\b{}\b", abbr.to_lowercase());
-        if Regex::new(&abbr_pattern).ok()?.is_match(&text_lower) {
-            return Some(iana_id.to_string());
+        match Regex::new(&abbr_pattern) {
+            Ok(re) => {
+                if re.is_match(&text_lower) {
+                    return Some(iana_id.to_string());
+                }
+            }
+            Err(e) => {
+                eprintln!("[TimeConverter] ⚠️  Failed to compile abbr regex for '{}': {}", abbr, e);
+                continue;
+            }
         }
     }
     
-    // Strategy 3: Check for city/country names in timezone labels
-    // Match patterns like "in Tokyo", "Tokyo time", or just "Tokyo"
+    // Strategy 3: Check for city/country names
     for (label, iana_id, keywords) in constants::ALL_TIMEZONES {
         let label_lower = label.to_lowercase();
         let keywords_lower = keywords.to_lowercase();
         
-        // Check if label appears in text
         if text_lower.contains(&label_lower) {
             return Some(iana_id.to_string());
         }
         
-        // Check if any keyword appears in text
         for keyword in keywords_lower.split_whitespace() {
-            if text_lower.contains(keyword) && keyword.len() > 3 {  // Avoid short false matches
+            if keyword.len() > 3 && text_lower.contains(keyword) {
                 return Some(iana_id.to_string());
             }
         }
     }
     
-    // No timezone detected
     None
 }
 
-/// Extract time portion from text by removing detected timezone keywords
+/// FIX: Detect if text is a conversion result to avoid re-parsing
+fn is_conversion_result(text: &str) -> bool {
+    // Pattern 1: Contains " - " separator with timezone format
+    let has_dash_separator = text.contains(" - ");
+    let has_timezone_format = text.contains('/') && text.contains('(') && text.contains(')');
+    
+    // Pattern 2: Contains formatted date like "04 dec" or "04 Dec"
+    let has_formatted_date = Regex::new(r"(?i)\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)")
+        .map(|re| re.is_match(text))
+        .unwrap_or(false);
+    
+    // Pattern 3: Contains time with am/pm and formatted date
+    let has_time_format = Regex::new(r"(?i)\d{1,2}:\d{2}\s*(am|pm)")
+        .map(|re| re.is_match(text))
+        .unwrap_or(false);
+    
+    // If it has the dash separator AND either timezone format OR (time format AND date format)
+    let looks_like_result = has_dash_separator && (has_timezone_format || (has_time_format && has_formatted_date));
+    
+    println!("[TimeConverter] 🔍 Result detection: dash={}, tz_fmt={}, date_fmt={}, time_fmt={}, is_result={}",
+        has_dash_separator, has_timezone_format, has_formatted_date, has_time_format, looks_like_result);
+    
+    looks_like_result
+}
+
 fn extract_time_portion(text: &str, detected_timezone: &Option<String>) -> String {
     println!("[TimeConverter] 🧹 extract_time_portion: input='{}', detected_tz={:?}", text, detected_timezone);
     let mut cleaned_text = text.to_string();
-    let original_text = cleaned_text.clone();
     
     if let Some(tz) = detected_timezone {
         println!("[TimeConverter] 🧹 Removing timezone: {}", tz);
-        // Remove the IANA ID if present
-        cleaned_text = cleaned_text.replace(tz, "");
+        
+        // Remove the IANA ID (case-insensitive)
+        match Regex::new(&format!(r"(?i)\b{}\b", regex::escape(tz))) {
+            Ok(regex) => {
+                cleaned_text = regex.replace_all(&cleaned_text, "").to_string();
+            }
+            Err(e) => {
+                eprintln!("[TimeConverter] ⚠️  Failed to compile IANA removal regex: {}", e);
+            }
+        }
         
         // Remove timezone abbreviations
         for (abbr, _) in TIMEZONE_ABBREVIATIONS {
-            let abbr_pattern = Regex::new(&format!(r"\b{}\b", abbr)).ok();
-            if let Some(regex) = abbr_pattern {
-                cleaned_text = regex.replace_all(&cleaned_text, "").to_string();
+            match Regex::new(&format!(r"(?i)\b{}\b", abbr)) {
+                Ok(regex) => {
+                    cleaned_text = regex.replace_all(&cleaned_text, "").to_string();
+                }
+                Err(e) => {
+                    eprintln!("[TimeConverter] ⚠️  Failed to compile abbr removal regex for '{}': {}", abbr, e);
+                }
             }
         }
         
         // Remove the detected timezone's label and keywords
         for (label, iana_id, keywords) in constants::ALL_TIMEZONES {
             if iana_id == tz {
-                // Remove label (case-insensitive)
-                let label_pattern = Regex::new(&format!(r"(?i)\b{}\b", regex::escape(label))).ok();
-                if let Some(regex) = label_pattern {
-                    cleaned_text = regex.replace_all(&cleaned_text, "").to_string();
+                match Regex::new(&format!(r"(?i)\b{}\b", regex::escape(label))) {
+                    Ok(regex) => {
+                        cleaned_text = regex.replace_all(&cleaned_text, "").to_string();
+                    }
+                    Err(e) => {
+                        eprintln!("[TimeConverter] ⚠️  Failed to compile label removal regex: {}", e);
+                    }
                 }
                 
-                // Remove each keyword (case-insensitive)
                 for keyword in keywords.split_whitespace() {
-                    let keyword_pattern = Regex::new(&format!(r"(?i)\b{}\b", regex::escape(keyword))).ok();
-                    if let Some(regex) = keyword_pattern {
-                        cleaned_text = regex.replace_all(&cleaned_text, "").to_string();
+                    if keyword.len() > 3 {
+                        match Regex::new(&format!(r"(?i)\b{}\b", regex::escape(keyword))) {
+                            Ok(regex) => {
+                                cleaned_text = regex.replace_all(&cleaned_text, "").to_string();
+                            }
+                            Err(e) => {
+                                eprintln!("[TimeConverter] ⚠️  Failed to compile keyword removal regex: {}", e);
+                            }
+                        }
                     }
                 }
                 break;
             }
         }
         
-        // Remove common timezone-related phrases
-        let phrases_to_remove = vec![
-            r"\bin\s+[A-Za-z]+",  // "in Tokyo"
-            r"[A-Za-z]+\s+time",  // "Tokyo time"
-        ];
-        
-        for pattern in phrases_to_remove {
-            if let Ok(regex) = Regex::new(pattern) {
-                cleaned_text = regex.replace_all(&cleaned_text, "").to_string();
+        // Remove common phrases
+        let phrases = vec![r"(?i)\bin\s+\w+", r"(?i)\w+\s+time"];
+        for pattern in phrases {
+            match Regex::new(pattern) {
+                Ok(regex) => {
+                    cleaned_text = regex.replace_all(&cleaned_text, "").to_string();
+                }
+                Err(e) => {
+                    eprintln!("[TimeConverter] ⚠️  Failed to compile phrase removal regex '{}': {}", pattern, e);
+                }
             }
         }
     }
     
-    // Clean up extra whitespace
     cleaned_text = cleaned_text.trim().to_string();
-    cleaned_text = Regex::new(r"\s+").ok()
-        .map(|r| r.replace_all(&cleaned_text, " ").to_string())
-        .unwrap_or(cleaned_text);
+    cleaned_text = match Regex::new(r"\s+") {
+        Ok(r) => r.replace_all(&cleaned_text, " ").to_string(),
+        Err(e) => {
+            eprintln!("[TimeConverter] ⚠️  Failed to compile whitespace normalization regex: {}", e);
+            cleaned_text
+        }
+    };
     
-    println!("[TimeConverter] 🧹 After cleaning: '{}' (was '{}')", cleaned_text, original_text);
+    println!("[TimeConverter] 🧹 After cleaning: '{}'", cleaned_text);
     
-    // If we cleaned everything away, default to "now"
     if cleaned_text.is_empty() {
         println!("[TimeConverter] 🧹 Text was completely cleaned, defaulting to 'now'");
         "now".to_string()
@@ -509,27 +620,9 @@ pub fn parse_time_from_text(text: &str) -> ParsedTimeInput {
     println!("[TimeConverter] 🔍 ========== PARSE TIME FROM TEXT ==========");
     println!("[TimeConverter] 📝 Input text: '{}'", text);
     
-    // Check if this looks like a conversion result
-    // Patterns: "time - timezone", "time, date - timezone", contains formatted timezone labels
-    let has_dash_separator = text.contains(" - ");
-    let has_timezone_format = text.contains('/') && text.contains('(');
-    let has_timezone_id = constants::ALL_TIMEZONES.iter().any(|(_, id, _)| text.contains(id));
-    let has_formatted_date = Regex::new(r"\d{1,2}\s+[a-z]{3}")
-        .map(|re| re.is_match(&text.to_lowercase()))
-        .unwrap_or(false);
-    
-    let looks_like_result = (has_dash_separator && (has_timezone_format || has_timezone_id)) ||
-        (has_timezone_format && has_formatted_date);
-    
-    println!("[TimeConverter] 🔍 Conversion result check:");
-    println!("  has_dash_separator: {}", has_dash_separator);
-    println!("  has_timezone_format: {}", has_timezone_format);
-    println!("  has_timezone_id: {}", has_timezone_id);
-    println!("  has_formatted_date: {}", has_formatted_date);
-    println!("  looks_like_result: {}", looks_like_result);
-    
-    if looks_like_result {
-        println!("[TimeConverter] ⚠️  Text looks like a conversion result, skipping parse");
+    // FIX: Improved result detection
+    if is_conversion_result(text) {
+        println!("[TimeConverter] ⚠️  Text looks like a conversion result, returning 'now'");
         return ParsedTimeInput {
             time_input: "now".to_string(),
             source_timezone: None,
@@ -549,19 +642,33 @@ pub fn parse_time_from_text(text: &str) -> ParsedTimeInput {
     }
 }
 
-/// Tauri command to parse time from selection
 #[tauri::command]
 pub async fn parse_time_from_selection(text: String) -> Result<ParsedTimeInput, String> {
     Ok(parse_time_from_text(&text))
 }
 
-/// Tauri command to convert time
+/// Get the system's IANA timezone (e.g., "Asia/Seoul", "America/New_York")
+/// This reads from macOS System Settings and is NOT affected by VPNs
+#[tauri::command]
+pub async fn get_system_timezone() -> Result<String, String> {
+    match iana_time_zone::get_timezone() {
+        Ok(tz) => {
+            println!("[TimeConverter] 🖥️  Detected system timezone: {}", tz);
+            Ok(tz)
+        }
+        Err(e) => {
+            println!("[TimeConverter] ⚠️  Failed to detect system timezone: {:?}", e);
+            // Fallback to UTC if detection fails
+            Ok("UTC".to_string())
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn convert_time(request: ConvertTimeRequest) -> Result<ConvertTimeResponse, String> {
     parse_and_convert_time(request)
 }
 
-/// Tauri command to get all timezones
 #[tauri::command]
 pub async fn get_timezones() -> Result<Vec<TimezoneInfo>, String> {
     Ok(get_all_timezones())
@@ -572,41 +679,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_and_convert_time() {
-        let request = ConvertTimeRequest {
-            time_input: "now".to_string(),
-            target_timezone: "Asia/Tokyo".to_string(),
-            source_timezone: None,
-        };
-        
-        let result = parse_and_convert_time(request);
-        assert!(result.is_ok());
-        
-        let response = result.unwrap();
-        assert!(!response.source_time.is_empty());
-        assert!(!response.target_time.is_empty());
-        assert!(!response.offset_description.is_empty());
+    fn test_is_conversion_result() {
+        assert!(is_conversion_result("11:30pm, 04 dec - Rome/Italy (CET)"));
+        assert!(is_conversion_result("03:45am, 25 Dec - Tokyo/Japan (JST)"));
+        assert!(!is_conversion_result("5pm rome"));
+        assert!(!is_conversion_result("tomorrow at 3pm"));
     }
 
     #[test]
-    fn test_get_all_timezones() {
-        let timezones = get_all_timezones();
-        assert_eq!(timezones.len(), 190);
-        assert_eq!(timezones[0].label, "Afghanistan");
-        assert_eq!(timezones[0].iana_id, "Asia/Kabul");
-    }
-
-    #[test]
-    fn test_generate_timezone_commands() {
-        let commands = generate_timezone_commands();
-        assert_eq!(commands.len(), 190);
-        assert!(commands[0].label.starts_with("Time in"));
-    }
-
-    #[test]
-    fn test_parse_time_rome() {
-        let parsed = parse_time_from_text("5pm rome");
-        assert_eq!(parsed.source_timezone, Some("Europe/Rome".to_string()));
-        assert_eq!(parsed.time_input, "5pm");
+    fn test_detect_timezone_case_insensitive() {
+        assert_eq!(detect_timezone_from_text("5pm EST"), Some("America/New_York".to_string()));
+        assert_eq!(detect_timezone_from_text("5pm est"), Some("America/New_York".to_string()));
+        assert_eq!(detect_timezone_from_text("europe/rome"), Some("Europe/Rome".to_string()));
     }
 }

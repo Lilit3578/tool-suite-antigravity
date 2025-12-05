@@ -45,6 +45,21 @@ interface AppState {
     setCurrencyRate: (rate: number | null) => void;
     currencyLoading: boolean;
     setCurrencyLoading: (loading: boolean) => void;
+
+    // Time converter state
+    timeFromInput: string;
+    setTimeFromInput: (text: string) => void;
+    timeToInput: string;
+    setTimeToInput: (text: string) => void;
+    timeSourceTimezone: string;
+    setTimeSourceTimezone: (tz: string) => void;
+    timeTargetTimezone: string;
+    setTimeTargetTimezone: (tz: string) => void;
+    timeRelativeOffset: string;
+    setTimeRelativeOffset: (offset: string) => void;
+    timeDateChangeIndicator: string | null;
+    setTimeDateChangeIndicator: (indicator: string | null) => void;
+    resetTimeConverter: () => void; // Reset all except targetTimezone
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -91,4 +106,39 @@ export const useAppStore = create<AppState>((set) => ({
     setCurrencyRate: (rate) => set({ currencyRate: rate }),
     currencyLoading: false,
     setCurrencyLoading: (loading) => set({ currencyLoading: loading }),
+
+    // Time converter
+    timeFromInput: "",
+    setTimeFromInput: (text) => set({ timeFromInput: text }),
+    timeToInput: "",
+    setTimeToInput: (text) => set({ timeToInput: text }),
+    timeSourceTimezone: "UTC", // Will be set to system timezone on mount
+    setTimeSourceTimezone: (tz) => set({ timeSourceTimezone: tz }),
+    timeTargetTimezone: (() => {
+        // Load from localStorage, default to America/New_York
+        if (typeof window !== "undefined") {
+            return localStorage.getItem("timeConverter_targetTimezone") || "America/New_York";
+        }
+        return "America/New_York";
+    })(),
+    setTimeTargetTimezone: (tz) => {
+        // Persist to localStorage
+        if (typeof window !== "undefined") {
+            localStorage.setItem("timeConverter_targetTimezone", tz);
+        }
+        set({ timeTargetTimezone: tz });
+    },
+    timeRelativeOffset: "",
+    setTimeRelativeOffset: (offset) => set({ timeRelativeOffset: offset }),
+    timeDateChangeIndicator: null,
+    setTimeDateChangeIndicator: (indicator) => set({ timeDateChangeIndicator: indicator }),
+    resetTimeConverter: () => set({
+        timeFromInput: "",
+        timeToInput: "",
+        timeRelativeOffset: "",
+        timeDateChangeIndicator: null,
+        // Note: timeSourceTimezone and timeTargetTimezone are NOT reset
+        // timeSourceTimezone will be re-detected on mount
+        // timeTargetTimezone persists via localStorage
+    }),
 }));

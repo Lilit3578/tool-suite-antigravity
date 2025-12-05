@@ -375,6 +375,7 @@ pub fn run() {
             core::features::time_converter::convert_time,
             core::features::time_converter::get_timezones,
             core::features::time_converter::parse_time_from_selection,
+            core::features::time_converter::get_system_timezone,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

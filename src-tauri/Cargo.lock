@@ -3391,6 +3391,7 @@ dependencies = [
  "cli-clipboard",
  "cocoa",
  "directories",
+ "iana-time-zone",
  "mouse_position",
  "objc",
  "once_cell",

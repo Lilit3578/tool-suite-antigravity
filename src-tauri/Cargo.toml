@@ -36,6 +36,7 @@ mouse_position = "0.1"
 uuid = { version = "1.11", features = ["v4", "serde"] }
 regex = "1.11"
 cli-clipboard = "0.4"  # System-level clipboard access without app activation
+iana-time-zone = "0.1"  # System timezone detection
 
 # macOS native window management
 [target.'cfg(target_os = "macos")'.dependencies]

@@ -166,6 +166,13 @@ export const api = {
     },
 
     /**
+     * Get the system's IANA timezone (e.g., "Asia/Seoul")
+     */
+    async getSystemTimezone(): Promise<string> {
+        return invoke<string>("get_system_timezone");
+    },
+
+    /**
      * Parse time from selected text (extract time and timezone)
      */
     async parseTimeFromSelection(text: string): Promise<ParsedTimeInput> {
