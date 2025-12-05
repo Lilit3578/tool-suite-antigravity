@@ -294,13 +294,78 @@ pub fn parse_and_convert_time(request: ConvertTimeRequest) -> Result<ConvertTime
     let source_offset_hours = source_offset_seconds as f64 / 3600.0;
     let diff_hours = offset_hours - source_offset_hours;
     
-    let offset_description = if diff_hours > 0.0 {
+    let mut offset_description = if diff_hours > 0.0 {
         format!("{:.1} hours ahead", diff_hours)
     } else if diff_hours < 0.0 {
         format!("{:.1} hours behind", diff_hours.abs())
     } else {
         "Same time".to_string()
     };
+    
+    // SMART CITY DETECTION: Detect if user searched for a secondary city
+    // Example: User searches "birmingham" -> matches "London/United Kingdom" timezone
+    // We want to append "Same time as Birmingham" to the description
+    println!("[TimeConverter] 🔍 Smart City Detection: Checking for secondary city match...");
+    
+    let input_lower = request.time_input.to_lowercase();
+    let mut smart_note: Option<String> = None;
+    
+    // Find which timezone was actually selected (check both source and target)
+    for (display_label, iana_id, keywords) in constants::ALL_TIMEZONES {
+        // Only check if this timezone matches either source or target
+        let is_relevant_timezone = iana_id == &source_tz_str || iana_id == &request.target_timezone;
+        
+        if !is_relevant_timezone {
+            continue;
+        }
+        
+        println!("[TimeConverter]   Checking timezone: {} ({})", display_label, iana_id);
+        
+        // Extract primary city from "London/United Kingdom" -> "London"
+        let primary_city = display_label
+            .split('/')
+            .next()
+            .unwrap_or(display_label)
+            .to_lowercase();
+        
+        println!("[TimeConverter]   Primary city: '{}'", primary_city);
+        
+        // Check each keyword in the timezone's search keywords
+        for word in keywords.split_whitespace() {
+            let word_lower = word.to_lowercase();
+            
+            // Skip if this word is the primary city itself
+            if word_lower == primary_city {
+                continue;
+            }
+            
+            // Check if the user's input contains this secondary city keyword
+            if input_lower.contains(&word_lower) && word_lower.len() > 3 {
+                // Found a match! Capitalize the first letter
+                let word_capitalized = if let Some(first_char) = word.chars().next() {
+                    first_char.to_uppercase().collect::<String>() + &word[1..]
+                } else {
+                    word.to_string()
+                };
+                
+                smart_note = Some(format!("Same time as {}", word_capitalized));
+                println!("[TimeConverter]   ✅ Smart note generated: '{}'", smart_note.as_ref().unwrap());
+                break;
+            }
+        }
+        
+        if smart_note.is_some() {
+            break;
+        }
+    }
+    
+    // Append smart note to offset description if found
+    if let Some(note) = smart_note {
+        offset_description = format!("{} • {}", offset_description, note);
+        println!("[TimeConverter] 📝 Final offset_description with smart note: '{}'", offset_description);
+    } else {
+        println!("[TimeConverter] ℹ️  No secondary city match found");
+    }
     
     // FIX: Format as 'hh:mm pm/am, DD Mon' (e.g., '06:00pm, 05 Dec')
     // %I = 12-hour format with leading zero (01-12)
@@ -340,66 +405,31 @@ fn format_utc_offset(offset_seconds: i32) -> String {
     format!("UTC{:+03}:{:02}", hours, minutes)
 }
 
-fn format_timezone_label(iana_id: &str, country_label: &str) -> String {
-    let city = iana_id
-        .split('/')
-        .last()
-        .unwrap_or(iana_id)
-        .replace('_', " ");
-    
-    let city_formatted: String = city
-        .split_whitespace()
-        .map(|word| {
-            let mut chars = word.chars();
-            match chars.next() {
-                None => String::new(),
-                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ");
-    
+fn format_timezone_label(iana_id: &str, display_label: &str) -> String {
+    // The display_label is already in "City/Country" format (e.g., "Beijing/China")
+    // Just need to append the timezone abbreviation
     let abbr = constants::get_timezone_abbreviation(iana_id);
-    
-    format!("{}/{} ({})", city_formatted, country_label, abbr)
+    format!("{} ({})", display_label, abbr)
 }
 
 fn format_timezone_label_with_abbr(iana_id: &str, abbr: &str) -> String {
     println!("[TimeConverter] 🏷️  Formatting label for IANA: '{}', abbr: '{}'", iana_id, abbr);
     
-    // Find the country label from constants
-    let country_label = constants::ALL_TIMEZONES
+    // Find the display label from constants (already in "City/Country" format)
+    let display_label = constants::ALL_TIMEZONES
         .iter()
         .find(|(_, id, _)| *id == iana_id)
-        .map(|(country, _, _)| *country)
+        .map(|(label, _, _)| *label)
         .unwrap_or_else(|| {
             println!("[TimeConverter] ⚠️  IANA ID '{}' not found in constants, using 'Unknown'", iana_id);
             "Unknown"
         });
     
-    println!("[TimeConverter] 🏷️  Found country: '{}'", country_label);
+    println!("[TimeConverter] 🏷️  Found display label: '{}'", display_label);
     
-    // Extract city name from IANA ID
-    let city = iana_id
-        .split('/')
-        .last()
-        .unwrap_or(iana_id)
-        .replace('_', " ");
-    
-    // Capitalize first letter of each word in city
-    let city_formatted: String = city
-        .split_whitespace()
-        .map(|word| {
-            let mut chars = word.chars();
-            match chars.next() {
-                None => String::new(),
-                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ");
-    
-    let result = format!("{}/{} ({})", city_formatted, country_label, abbr);
+    // The display label is already in "City/Country" format (e.g., "Beijing/China")
+    // Just append the abbreviation
+    let result = format!("{} ({})", display_label, abbr);
     println!("[TimeConverter] 🏷️  Final label: '{}'", result);
     result
 }

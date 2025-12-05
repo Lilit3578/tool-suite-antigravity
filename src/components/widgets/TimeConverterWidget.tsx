@@ -365,7 +365,7 @@ export function TimeConverterWidget() {
                         }}
                         items={timezoneOptions.map(tz => tz.label)}
                         placeholder="Select timezone"
-                        className="w-[140px] text-ink-0"
+                        className="w-[200px] text-ink-0"
                     />
                 </div>
 
@@ -407,7 +407,7 @@ export function TimeConverterWidget() {
                         }}
                         items={timezoneOptions.map(tz => tz.label)}
                         placeholder="Select timezone"
-                        className="w-[140px] text-ink-0"
+                        className="w-[200px] text-ink-0"
                     />
                 </div>
 
