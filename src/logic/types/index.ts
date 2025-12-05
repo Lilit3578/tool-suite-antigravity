@@ -165,6 +165,7 @@ export interface ConvertTimeRequest {
     time_input: string;
     target_timezone: string;
     source_timezone?: string;
+    matched_keyword?: string;  // NEW: Which keyword triggered timezone detection
 }
 
 export interface ConvertTimeResponse {
@@ -192,6 +193,7 @@ export interface TimezoneInfo {
 export interface ParsedTimeInput {
     time_input: string;
     source_timezone?: string;
+    matched_keyword?: string;  // NEW: Which keyword triggered timezone detection
 }
 
 export type ContextCategory =

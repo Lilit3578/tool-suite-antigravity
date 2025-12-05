@@ -168,6 +168,8 @@ pub struct ConvertTimeRequest {
     pub time_input: String,
     pub target_timezone: String,
     pub source_timezone: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matched_keyword: Option<String>,  // NEW: Which keyword triggered timezone detection
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -198,6 +200,8 @@ pub struct TimezoneInfo {
 pub struct ParsedTimeInput {
     pub time_input: String,
     pub source_timezone: Option<String>,  // IANA ID or None for Local
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matched_keyword: Option<String>,  // NEW: Which keyword triggered timezone detection
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

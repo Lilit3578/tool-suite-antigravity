@@ -148,19 +148,22 @@ impl Feature for TimeConverterFeature {
                     .and_then(|v| v.as_str())
                     .unwrap_or("now");
                 
-                // FIX: Parse the text to extract both time and source timezone
-                let parsed = parse_time_from_text(text_input);
+                println!("[TimeConverter] 🔍 Parsing time from text: '{}'", text_input);
+                let parsed = parse_time_from_text(text_input)
+                    .ok_or_else(|| "Failed to parse time from text, likely a conversion result.".to_string())?;
                 
-                println!("[TimeConverter] 📥 Action params parsed:");
+                println!("[TimeConverter] 📊 Parsed result:");
                 println!("  original text: '{}'", text_input);
                 println!("  parsed time_input: '{}'", parsed.time_input);
                 println!("  parsed source_timezone: {:?}", parsed.source_timezone);
+                println!("  matched_keyword: {:?}", parsed.matched_keyword);
                 println!("  target_timezone: '{}'", target_timezone);
                 
                 let request = ConvertTimeRequest {
                     time_input: parsed.time_input,
                     target_timezone: target_timezone.clone(),
                     source_timezone: parsed.source_timezone,
+                    matched_keyword: parsed.matched_keyword,
                 };
                 
                 let response = parse_and_convert_time(request)?;
@@ -304,59 +307,53 @@ pub fn parse_and_convert_time(request: ConvertTimeRequest) -> Result<ConvertTime
     
     // SMART CITY DETECTION: Detect if user searched for a secondary city
     // Example: User searches "birmingham" -> matches "London/United Kingdom" timezone
-    // We want to append "Same time as Birmingham" to the description
+    // We want to append "Uses the same timezone as Birmingham" to the description
     println!("[TimeConverter] 🔍 Smart City Detection: Checking for secondary city match...");
     
-    let input_lower = request.time_input.to_lowercase();
     let mut smart_note: Option<String> = None;
     
-    // Find which timezone was actually selected (check both source and target)
-    for (display_label, iana_id, keywords) in constants::ALL_TIMEZONES {
-        // Only check if this timezone matches either source or target
-        let is_relevant_timezone = iana_id == &source_tz_str || iana_id == &request.target_timezone;
+    // Check if we have a matched_keyword from the timezone detection
+    if let Some(ref keyword) = request.matched_keyword {
+        println!("[TimeConverter]   Matched keyword from detection: '{}'", keyword);
         
-        if !is_relevant_timezone {
-            continue;
-        }
-        
-        println!("[TimeConverter]   Checking timezone: {} ({})", display_label, iana_id);
-        
-        // Extract primary city from "London/United Kingdom" -> "London"
-        let primary_city = display_label
-            .split('/')
-            .next()
-            .unwrap_or(display_label)
-            .to_lowercase();
-        
-        println!("[TimeConverter]   Primary city: '{}'", primary_city);
-        
-        // Check each keyword in the timezone's search keywords
-        for word in keywords.split_whitespace() {
-            let word_lower = word.to_lowercase();
-            
-            // Skip if this word is the primary city itself
-            if word_lower == primary_city {
-                continue;
-            }
-            
-            // Check if the user's input contains this secondary city keyword
-            if input_lower.contains(&word_lower) && word_lower.len() > 3 {
-                // Found a match! Capitalize the first letter
-                let word_capitalized = if let Some(first_char) = word.chars().next() {
-                    first_char.to_uppercase().collect::<String>() + &word[1..]
-                } else {
-                    word.to_string()
-                };
-                
-                smart_note = Some(format!("Same time as {}", word_capitalized));
-                println!("[TimeConverter]   ✅ Smart note generated: '{}'", smart_note.as_ref().unwrap());
-                break;
+        // If source_timezone was explicitly provided, check if the keyword is a secondary city
+        if request.source_timezone.is_some() {
+            // Find the timezone info for the source timezone
+            for (display_label, iana_id, _keywords) in constants::ALL_TIMEZONES {
+                if iana_id == &source_tz_str {
+                    println!("[TimeConverter]   Found source timezone: {} ({})", display_label, iana_id);
+                    
+                    // Extract primary city from "London/United Kingdom" -> "London"
+                    let primary_city = display_label
+                        .split('/')
+                        .next()
+                        .unwrap_or(display_label)
+                        .to_lowercase();
+                    
+                    println!("[TimeConverter]   Primary city: '{}'", primary_city);
+                    
+                    // Check if the matched keyword is different from the primary city
+                    let keyword_lower = keyword.to_lowercase();
+                    if keyword_lower != primary_city && keyword_lower.len() > 3 {
+                        // Capitalize the first letter of the keyword
+                        let keyword_capitalized = if let Some(first_char) = keyword.chars().next() {
+                            first_char.to_uppercase().collect::<String>() + &keyword[1..]
+                        } else {
+                            keyword.clone()
+                        };
+                        
+                        smart_note = Some(format!("Uses the same timezone as {}", keyword_capitalized));
+                        println!("[TimeConverter]   ✅ Smart note generated: '{}'", smart_note.as_ref().unwrap());
+                    } else {
+                        println!("[TimeConverter]   ℹ️  Matched keyword '{}' is the primary city, no note needed", keyword);
+                    }
+                    
+                    break;
+                }
             }
         }
-        
-        if smart_note.is_some() {
-            break;
-        }
+    } else {
+        println!("[TimeConverter]   No matched keyword available");
     }
     
     // Append smart note to offset description if found
@@ -466,7 +463,8 @@ pub fn generate_timezone_commands() -> Vec<CommandItem> {
 }
 
 /// FIX: Enhanced detection with proper case handling and result pattern detection
-fn detect_timezone_from_text(text: &str) -> Option<String> {
+/// Returns: Option<(iana_id, matched_keyword)>
+fn detect_timezone_from_text(text: &str) -> Option<(String, Option<String>)> {
     let text_lower = text.to_lowercase();
     
     // FIX: Check if this looks like a conversion result - more comprehensive patterns
@@ -489,7 +487,7 @@ fn detect_timezone_from_text(text: &str) -> Option<String> {
             // Find matching IANA ID (case-insensitive)
             for (_, id, _) in constants::ALL_TIMEZONES {
                 if id.eq_ignore_ascii_case(iana_id) {
-                    return Some(id.to_string());
+                    return Some((id.to_string(), None)); // IANA format has no keyword
                 }
             }
         }
@@ -501,7 +499,7 @@ fn detect_timezone_from_text(text: &str) -> Option<String> {
         match Regex::new(&abbr_pattern) {
             Ok(re) => {
                 if re.is_match(&text_lower) {
-                    return Some(iana_id.to_string());
+                    return Some((iana_id.to_string(), Some(abbr.to_string())));
                 }
             }
             Err(e) => {
@@ -517,12 +515,17 @@ fn detect_timezone_from_text(text: &str) -> Option<String> {
         let keywords_lower = keywords.to_lowercase();
         
         if text_lower.contains(&label_lower) {
-            return Some(iana_id.to_string());
+            return Some((iana_id.to_string(), Some(label.to_string())));
         }
         
         for keyword in keywords_lower.split_whitespace() {
             if keyword.len() > 3 && text_lower.contains(keyword) {
-                return Some(iana_id.to_string());
+                // Return the original keyword (not lowercased) for proper capitalization
+                let original_keyword = keywords
+                    .split_whitespace()
+                    .find(|k| k.to_lowercase() == keyword)
+                    .unwrap_or(keyword);
+                return Some((iana_id.to_string(), Some(original_keyword.to_string())));
             }
         }
     }
@@ -646,35 +649,44 @@ fn extract_time_portion(text: &str, detected_timezone: &Option<String>) -> Strin
 }
 
 /// Parse time from selected text, extracting both time and timezone
-pub fn parse_time_from_text(text: &str) -> ParsedTimeInput {
+pub fn parse_time_from_text(text: &str) -> Option<ParsedTimeInput> {
     println!("[TimeConverter] 🔍 ========== PARSE TIME FROM TEXT ==========");
     println!("[TimeConverter] 📝 Input text: '{}'", text);
     
-    // FIX: Improved result detection
+    // Step 1: Check if this is a conversion result
     if is_conversion_result(text) {
-        println!("[TimeConverter] ⚠️  Text looks like a conversion result, returning 'now'");
-        return ParsedTimeInput {
-            time_input: "now".to_string(),
-            source_timezone: None,
-        };
+        println!("[TimeConverter] 🚫 Detected conversion result, returning None");
+        println!("[TimeConverter] ✅ ========== PARSE COMPLETE ==========");
+        return None;
     }
     
-    let detected_timezone = detect_timezone_from_text(text);
-    println!("[TimeConverter] 🌍 Detected timezone: {:?}", detected_timezone);
+    // Step 2: Detect timezone from text
+    let detected_result = detect_timezone_from_text(text);
+    let (detected_timezone, matched_keyword) = match detected_result {
+        Some((tz, kw)) => (Some(tz), kw),
+        None => (None, None),
+    };
     
+    println!("[TimeConverter] 🌍 Detected timezone: {:?}", detected_timezone);
+    println!("[TimeConverter] 🏷️  Matched keyword: {:?}", matched_keyword);
+    
+    // Step 3: Extract time portion (remove timezone info)
     let time_input = extract_time_portion(text, &detected_timezone);
     println!("[TimeConverter] ⏰ Extracted time input: '{}'", time_input);
+    
     println!("[TimeConverter] ✅ ========== PARSE COMPLETE ==========");
     
-    ParsedTimeInput {
+    Some(ParsedTimeInput {
         time_input,
         source_timezone: detected_timezone,
-    }
+        matched_keyword,
+    })
 }
 
 #[tauri::command]
 pub async fn parse_time_from_selection(text: String) -> Result<ParsedTimeInput, String> {
-    Ok(parse_time_from_text(&text))
+    parse_time_from_text(&text)
+        .ok_or_else(|| "Failed to parse time from selection, likely a conversion result.".to_string())
 }
 
 /// Get the system's IANA timezone (e.g., "Asia/Seoul", "America/New_York")
@@ -718,8 +730,17 @@ mod tests {
 
     #[test]
     fn test_detect_timezone_case_insensitive() {
-        assert_eq!(detect_timezone_from_text("5pm EST"), Some("America/New_York".to_string()));
-        assert_eq!(detect_timezone_from_text("5pm est"), Some("America/New_York".to_string()));
-        assert_eq!(detect_timezone_from_text("europe/rome"), Some("Europe/Rome".to_string()));
+        assert_eq!(
+            detect_timezone_from_text("5pm EST"),
+            Some(("America/New_York".to_string(), Some("EST".to_string())))
+        );
+        assert_eq!(
+            detect_timezone_from_text("5pm est"),
+            Some(("America/New_York".to_string(), Some("est".to_string())))
+        );
+        assert_eq!(
+            detect_timezone_from_text("europe/rome"),
+            Some(("Europe/Rome".to_string(), None))
+        );
     }
 }

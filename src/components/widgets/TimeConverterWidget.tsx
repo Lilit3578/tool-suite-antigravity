@@ -30,6 +30,8 @@ export function TimeConverterWidget() {
     const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
     const [isInitialized, setIsInitialized] = React.useState(false);
     const [reinitKey, setReinitKey] = React.useState(0); // Force re-initialization
+    const [offsetDescription, setOffsetDescription] = React.useState<string>(""); // Smart city detection note
+    const [matchedKeyword, setMatchedKeyword] = React.useState<string | undefined>(undefined);  // NEW: Track matched keyword
 
     // Refs for tracking editing state to prevent circular updates
     const isEditingFromRef = useRef(false);
@@ -99,6 +101,12 @@ export function TimeConverterWidget() {
                     if (parsed.source_timezone) {
                         console.log('[TimeConverter] ⚡ Setting source timezone from parsing:', parsed.source_timezone);
                         setTimeSourceTimezone(parsed.source_timezone);
+                    }
+
+                    // Store matched keyword if available
+                    if (parsed.matched_keyword) {
+                        console.log('[TimeConverter] 🏷️ Storing matched keyword:', parsed.matched_keyword);
+                        setMatchedKeyword(parsed.matched_keyword);
                     }
 
                     // Then set the time input
@@ -251,12 +259,15 @@ export function TimeConverterWidget() {
                 time_input: input,
                 target_timezone: target,
                 source_timezone: source,
+                matched_keyword: matchedKeyword,  // Pass matched keyword
             });
 
             console.log(`[TimeConverter] FROM→TO response [${convId}]:`, response);
+            console.log(`[TimeConverter] 📝 offsetDescription:`, response.offset_description);
 
             setTimeRelativeOffset(response.relative_offset);
             setTimeDateChangeIndicator(response.date_change_indicator || null);
+            setOffsetDescription(response.offset_description || "");
             setErrorMessage(null);
 
             // Update FROM field with formatted time (with date) when user is not editing
@@ -274,6 +285,7 @@ export function TimeConverterWidget() {
             setErrorMessage(errorMsg);
             setTimeRelativeOffset("");
             setTimeDateChangeIndicator(null);
+            setOffsetDescription("");
             if (!isEditingToRef.current) {
                 setTimeToInput("");
             }
@@ -288,12 +300,14 @@ export function TimeConverterWidget() {
                 time_input: input,
                 target_timezone: target,
                 source_timezone: source,
+                matched_keyword: matchedKeyword,  // Pass matched keyword
             });
 
             console.log(`[TimeConverter] TO→FROM response [${convId}]:`, response);
 
             setTimeRelativeOffset(response.relative_offset);
             setTimeDateChangeIndicator(response.date_change_indicator || null);
+            setOffsetDescription(response.offset_description || "");
             setErrorMessage(null);
 
             // Update TO field with formatted time
@@ -311,16 +325,18 @@ export function TimeConverterWidget() {
             setErrorMessage(errorMsg);
             setTimeRelativeOffset("");
             setTimeDateChangeIndicator(null);
+            setOffsetDescription("");
             if (!isEditingFromRef.current) {
                 setTimeFromInput("");
             }
         }
     }
 
-    // Create timezone display options
+    // Create timezone display options with keywords for search
     const timezoneOptions = timezones.map(tz => ({
         value: tz.iana_id,
-        label: tz.label
+        label: tz.label,
+        keywords: tz.keywords // Include keywords for search
     }));
 
     // Debug: log current timezone values
@@ -329,6 +345,7 @@ export function TimeConverterWidget() {
         timeTargetTimezone,
         timeFromInput,
         timeToInput,
+        offsetDescription,
         isInitialized,
         reinitKey
     });
@@ -363,7 +380,10 @@ export function TimeConverterWidget() {
                                 setTimeSourceTimezone(tz.value);
                             }
                         }}
-                        items={timezoneOptions.map(tz => tz.label)}
+                        items={timezoneOptions.map(tz => ({
+                            label: tz.label,
+                            searchText: `${tz.label} ${tz.keywords}` // Combine label and keywords for search
+                        }))}
                         placeholder="Select timezone"
                         className="w-[200px] text-ink-0"
                     />
@@ -405,7 +425,10 @@ export function TimeConverterWidget() {
                                 setTimeTargetTimezone(tz.value);
                             }
                         }}
-                        items={timezoneOptions.map(tz => tz.label)}
+                        items={timezoneOptions.map(tz => ({
+                            label: tz.label,
+                            searchText: `${tz.label} ${tz.keywords}` // Combine label and keywords for search
+                        }))}
                         placeholder="Select timezone"
                         className="w-[200px] text-ink-0"
                     />
@@ -440,6 +463,17 @@ export function TimeConverterWidget() {
                     {timeDateChangeIndicator && (
                         <span className="ml-2 text-ink-900">• {timeDateChangeIndicator}</span>
                     )}
+                </div>
+            )}
+
+            {/* Smart City Detection note */}
+            {offsetDescription && offsetDescription.includes('•') && (
+                <div className="text-center text-ink-600 text-[11px] font-normal italic">
+                    {(() => {
+                        const note = offsetDescription.split('•')[1]?.trim();
+                        console.log('[TimeConverter] 🏙️ Displaying Smart City note:', note);
+                        return note;
+                    })()}
                 </div>
             )}
 

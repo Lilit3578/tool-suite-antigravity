@@ -20,7 +20,7 @@ import {
 interface ComboboxProps {
     value: string
     onChange: (value: string) => void
-    items: string[]
+    items: string[] | { label: string; searchText: string }[]
     placeholder?: string
     className?: string
     searchPlaceholder?: string
@@ -35,6 +35,13 @@ export function Combobox({
     searchPlaceholder = "Search...",
 }: ComboboxProps) {
     const [open, setOpen] = React.useState(false)
+
+    // Normalize items to always have label and searchText
+    const normalizedItems = items.map(item =>
+        typeof item === 'string'
+            ? { label: item, searchText: item }
+            : item
+    );
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -73,17 +80,17 @@ export function Combobox({
                     <CommandEmpty className="text-ink-700">No results.</CommandEmpty>
 
                     <CommandGroup className="overflow-y-auto max-h-[250px]">
-                        {items.map((item) => (
+                        {normalizedItems.map((item) => (
                             <CommandItem
-                                key={item}
-                                value={item}
+                                key={item.label}
+                                value={item.searchText} // Use searchText for filtering
                                 onSelect={() => {
-                                    onChange(item)
+                                    onChange(item.label) // Return label on selection
                                     setOpen(false)
                                 }}
                                 className="cursor-pointer text-ink-1000 data-[selected=true]:bg-ink-200 data-[selected=true]:text-ink-1000"
                             >
-                                {item}
+                                {item.label}
                             </CommandItem>
                         ))}
                     </CommandGroup>
