@@ -8,6 +8,8 @@ import { ClipboardHistoryWidget } from "./components/widgets/ClipboardHistoryWid
 import { SettingsWidget } from "./components/widgets/SettingsWidget";
 import { UnitConverterWidget } from "./components/widgets/UnitConverterWidget";
 import { TimeConverterWidget } from "./components/widgets/TimeConverterWidget";
+import { DefinitionWidget } from "./components/widgets/DefinitionWidget";
+import { TextAnalyserWidget } from "./components/widgets/TextAnalyserWidget";
 
 
 function App() {
@@ -65,6 +67,10 @@ function App() {
       return <UnitConverterWidget />;
     case "time_converter":
       return <TimeConverterWidget />;
+    case "definition":
+      return <DefinitionWidget />;
+    case "text_analyser":
+      return <TextAnalyserWidget />;
     case "clipboard":
       return <ClipboardHistoryWidget />;
     case "settings":

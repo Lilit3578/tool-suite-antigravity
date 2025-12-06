@@ -37,6 +37,7 @@ uuid = { version = "1.11", features = ["v4", "serde"] }
 regex = "1.11"
 cli-clipboard = "0.4"  # System-level clipboard access without app activation
 iana-time-zone = "0.1"  # System timezone detection
+unicode-segmentation = "1.10" # Text analysis (UAX #29 words/graphemes)
 
 # macOS native window management
 [target.'cfg(target_os = "macos")'.dependencies]

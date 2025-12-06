@@ -16,6 +16,9 @@ import type {
     ExecuteActionRequest,
     ExecuteActionResponse,
     ClipboardItem,
+    LookupDefinitionRequest,
+    LookupDefinitionResponse,
+    TextAnalysisResponse,
 } from "../types";
 
 
@@ -177,5 +180,26 @@ export const api = {
      */
     async parseTimeFromSelection(text: string): Promise<ParsedTimeInput> {
         return invoke<ParsedTimeInput>("parse_time_from_selection", { text });
+    },
+
+    /**
+     * Look up word definition, synonyms, and antonyms
+     */
+    async lookupDefinition(request: LookupDefinitionRequest): Promise<LookupDefinitionResponse> {
+        return invoke<LookupDefinitionResponse>("lookup_definition", { request });
+    },
+
+    /**
+     * Write text to clipboard (reliable backend method)
+     */
+    async writeClipboardText(text: string): Promise<void> {
+        return invoke<void>("write_clipboard_text", { text });
+    },
+
+    /**
+     * Analyze text stats (word count, reading time, etc.)
+     */
+    async analyzeText(text: string): Promise<TextAnalysisResponse> {
+        return invoke<TextAnalysisResponse>("analyze_text", { request: { text } });
     },
 };

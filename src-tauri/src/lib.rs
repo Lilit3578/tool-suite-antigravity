@@ -376,6 +376,9 @@ pub fn run() {
             core::features::time_converter::get_timezones,
             core::features::time_converter::parse_time_from_selection,
             core::features::time_converter::get_system_timezone,
+            core::features::definition::lookup_definition,
+            core::features::text_analyser::analyze_text,
+            core::clipboard::write_clipboard_text,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
@@ -417,6 +420,8 @@ async fn show_widget_window_async(
         "translator" => (700, 550, "Translator", false, false),
         "currency" => (500, 400, "Currency Converter", false, false),
         "time_converter" => (600, 500, "Time Zone Converter", false, false),
+        "definition" => (400, 500, "Definition Lookup", false, false),
+        "text_analyser" => (600, 450, "Text Analyser", false, false),
         "settings" => (800, 600, "Settings", false, false),
         _ => (600, 400, "Widget", false, false),
     };
@@ -520,6 +525,7 @@ fn show_widget_window_legacy(app: &tauri::AppHandle, widget: &str, has_selection
         "translator" => (700, 550, "Translator", false, false),  // Increased height
         "currency" => (500, 400, "Currency Converter", false, false),  // Increased height
         "time_converter" => (600, 500, "Time Zone Converter", false, false),
+        "definition" => (400, 500, "Definition Lookup", false, false),
         "settings" => (800, 600, "Settings", false, false),
         _ => (600, 400, "Widget", false, false),
     };
@@ -623,6 +629,7 @@ async fn show_widget_window_create_new_async(app: &tauri::AppHandle, widget: &st
         "translator" => (700, 550, "Translator", false, false),
         "currency" => (500, 400, "Currency Converter", false, false),
         "time_converter" => (600, 500, "Time Zone Converter", false, false),
+        "definition" => (400, 500, "Definition Lookup", false, false),
         "settings" => (800, 600, "Settings", false, false),
         _ => (600, 400, "Widget", false, false),
     };
@@ -762,7 +769,7 @@ async fn show_widget_window_create_new_async(app: &tauri::AppHandle, widget: &st
     
         // CRITICAL FIX: Configure ALL widgets for fullscreen overlay IMMEDIATELY after creation
         // This ensures translator, currency, clipboard, settings, etc. all appear over fullscreen apps
-        if widget == "palette" || widget == "translator" || widget == "currency" || widget == "clipboard" || widget == "settings" {
+        if widget == "palette" || widget == "translator" || widget == "currency" || widget == "clipboard" || widget == "settings" || widget == "time_converter" || widget == "unit_converter" || widget == "definition" {
             println!("🔵 [DEBUG] [show_widget_window] Configuring widget '{}' for fullscreen overlay...", widget);
             
             // CRITICAL: Configure and show ONCE - no verification or retry (internal retry handles it)

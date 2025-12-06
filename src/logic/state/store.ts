@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { AppSettings } from "../types";
 
 
-export type WidgetType = "palette" | "translator" | "currency" | "unit_converter" | "time_converter" | "clipboard" | "settings" | "permissions";
+export type WidgetType = "palette" | "translator" | "currency" | "unit_converter" | "time_converter" | "definition" | "text_analyser" | "clipboard" | "settings" | "permissions";
 
 interface AppState {
     // Current widget being displayed

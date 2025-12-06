@@ -159,7 +159,16 @@ export type ActionType =
     | 'convert_mass_to_quart'
     | 'convert_mass_to_gal'
     // Time zone conversion - polymorphic variant
-    | { convert_time: string };  // Carries timezone ID
+    | { convert_time: string }  // Carries timezone ID
+    // Definition actions
+    | 'find_synonyms'
+    | 'find_antonyms'
+    | 'find_antonyms'
+    | 'brief_definition'
+    // Text analysis actions
+    | 'count_words'
+    | 'count_chars'
+    | 'reading_time';
 
 export interface ConvertTimeRequest {
     time_input: string;
@@ -194,6 +203,37 @@ export interface ParsedTimeInput {
     time_input: string;
     source_timezone?: string;
     matched_keyword?: string;  // NEW: Which keyword triggered timezone detection
+}
+
+export interface LookupDefinitionRequest {
+    word: string;
+}
+
+export interface LookupDefinitionResponse {
+    word: string;
+    phonetic?: string;
+    definitions: DefinitionEntry[];
+    synonyms: string[];
+    antonyms: string[];
+}
+
+export interface DefinitionEntry {
+    part_of_speech: string;
+    definition: string;
+    example?: string;
+}
+
+export interface TextAnalysisRequest {
+    text: string;
+}
+
+export interface TextAnalysisResponse {
+    word_count: number;
+    char_count: number;
+    char_count_no_spaces: number;
+    grapheme_count: number;
+    line_count: number;
+    reading_time_sec: number;
 }
 
 export type ContextCategory =

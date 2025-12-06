@@ -161,6 +161,16 @@ pub enum ActionType {
     
     // Time zone conversion - polymorphic variant carrying timezone ID
     ConvertTime(String),
+    
+    // Definition lookup actions
+    FindSynonyms,
+    FindAntonyms,
+    BriefDefinition,
+    
+    // Text analysis actions
+    CountWords,
+    CountChars,
+    ReadingTime,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -202,6 +212,42 @@ pub struct ParsedTimeInput {
     pub source_timezone: Option<String>,  // IANA ID or None for Local
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matched_keyword: Option<String>,  // NEW: Which keyword triggered timezone detection
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LookupDefinitionRequest {
+    pub word: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LookupDefinitionResponse {
+    pub word: String,
+    pub phonetic: Option<String>,
+    pub definitions: Vec<DefinitionEntry>,
+    pub synonyms: Vec<String>,
+    pub antonyms: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DefinitionEntry {
+    pub part_of_speech: String,
+    pub definition: String,
+    pub example: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextAnalysisRequest {
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextAnalysisResponse {
+    pub word_count: usize,
+    pub char_count: usize,
+    pub char_count_no_spaces: usize,
+    pub grapheme_count: usize,
+    pub line_count: usize,
+    pub reading_time_sec: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

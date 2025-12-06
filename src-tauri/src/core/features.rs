@@ -13,6 +13,8 @@ pub mod currency;
 pub mod clipboard;
 pub mod unit_converter;
 pub mod time_converter;
+pub mod definition;
+pub mod text_analyser;
 
 /// Feature trait that all features must implement
 ///
@@ -64,6 +66,8 @@ pub fn get_all_features() -> Vec<Box<dyn Feature>> {
         Box::new(clipboard::ClipboardFeature),
         Box::new(unit_converter::UnitConverter),
         Box::new(time_converter::TimeConverterFeature),
+        Box::new(definition::DefinitionFeature),
+        Box::new(text_analyser::TextAnalyserFeature),
     ]
 }
 

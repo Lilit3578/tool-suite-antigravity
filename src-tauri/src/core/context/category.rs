@@ -178,7 +178,13 @@ pub fn get_action_category(action: &ActionType) -> Option<ContextCategory> {
         | ActionType::TranslateSv
         | ActionType::TranslateDa
         | ActionType::TranslateFi
-        | ActionType::TranslateHu => Some(ContextCategory::Text),
+        | ActionType::TranslateHu
+        | ActionType::FindSynonyms
+        | ActionType::FindAntonyms
+        | ActionType::BriefDefinition
+        | ActionType::CountWords
+        | ActionType::CountChars
+        | ActionType::ReadingTime => Some(ContextCategory::Text),
         
         // Currency conversion actions → Currency
         ActionType::ConvertUsd
@@ -253,6 +259,8 @@ pub fn get_action_category(action: &ActionType) -> Option<ContextCategory> {
 pub fn get_widget_category(widget_type: &str) -> Option<ContextCategory> {
     match widget_type {
         "translator" => Some(ContextCategory::Text),
+        "definition" => Some(ContextCategory::Text),
+        "text_analyser" => Some(ContextCategory::Text),
         "currency" => Some(ContextCategory::Currency),
         "time_converter" => Some(ContextCategory::Time),
         "unit_converter" => None, // Unit converter handles multiple categories
