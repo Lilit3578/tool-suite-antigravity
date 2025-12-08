@@ -3,14 +3,14 @@
 //! Provides dictionary lookups with definitions, synonyms, and antonyms.
 
 use crate::shared::types::*;
-use super::Feature;
+use super::{FeatureSync, FeatureAsync};
 use std::collections::HashMap;
 use async_trait::async_trait;
 
+#[derive(Clone)]
 pub struct DefinitionFeature;
 
-#[async_trait]
-impl Feature for DefinitionFeature {
+impl FeatureSync for DefinitionFeature {
     fn id(&self) -> &str {
         "definition"
     }
@@ -55,6 +55,24 @@ impl Feature for DefinitionFeature {
         ]
     }
     
+    fn get_context_boost(&self, captured_text: &str) -> HashMap<String, f64> {
+        let mut boost_map = HashMap::new();
+        
+        // Boost if text is a single word (likely a word lookup)
+        let words: Vec<&str> = captured_text.split_whitespace().collect();
+        if words.len() == 1 && words[0].chars().all(|c| c.is_alphabetic()) {
+            boost_map.insert("widget_definition".to_string(), 80.0);
+            boost_map.insert("find_synonyms".to_string(), 70.0);
+            boost_map.insert("find_antonyms".to_string(), 70.0);
+            boost_map.insert("brief_definition".to_string(), 75.0);
+        }
+        
+        boost_map
+    }
+}
+
+#[async_trait]
+impl FeatureAsync for DefinitionFeature {
     async fn execute_action(
         &self,
         action: &ActionType,
@@ -111,21 +129,6 @@ impl Feature for DefinitionFeature {
             result,
             metadata: Some(serde_json::to_value(&response).unwrap_or_default()),
         })
-    }
-    
-    fn get_context_boost(&self, captured_text: &str) -> HashMap<String, f64> {
-        let mut boost_map = HashMap::new();
-        
-        // Boost if text is a single word (likely a word lookup)
-        let words: Vec<&str> = captured_text.split_whitespace().collect();
-        if words.len() == 1 && words[0].chars().all(|c| c.is_alphabetic()) {
-            boost_map.insert("widget_definition".to_string(), 80.0);
-            boost_map.insert("find_synonyms".to_string(), 70.0);
-            boost_map.insert("find_antonyms".to_string(), 70.0);
-            boost_map.insert("brief_definition".to_string(), 75.0);
-        }
-        
-        boost_map
     }
 }
 

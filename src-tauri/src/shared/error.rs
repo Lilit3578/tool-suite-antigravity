@@ -60,5 +60,22 @@ impl From<&str> for AppError {
     }
 }
 
+// Convert CommandError to AppError for gradual migration
+impl From<crate::shared::errors::CommandError> for AppError {
+    fn from(err: crate::shared::errors::CommandError) -> Self {
+        match err {
+            crate::shared::errors::CommandError::SystemIO(msg) => AppError::Io(msg),
+            crate::shared::errors::CommandError::NetworkError(msg) => AppError::Network(msg),
+            crate::shared::errors::CommandError::MathError(msg) => AppError::Calculation(msg),
+            crate::shared::errors::CommandError::InvalidInput(msg) => AppError::Validation(msg),
+            crate::shared::errors::CommandError::ClipboardError(msg) => AppError::Clipboard(msg),
+            crate::shared::errors::CommandError::FeatureMissing(msg) => AppError::Feature(msg),
+            crate::shared::errors::CommandError::AccessibilityDenied => AppError::System("Accessibility permissions denied".to_string()),
+            crate::shared::errors::CommandError::WindowError(msg) => AppError::System(msg),
+            crate::shared::errors::CommandError::Unknown(msg) => AppError::Unknown(msg),
+        }
+    }
+}
+
 // Helper for Tauri Result
 pub type AppResult<T> = Result<T, AppError>;

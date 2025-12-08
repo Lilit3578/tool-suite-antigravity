@@ -7,17 +7,17 @@ const ERR_NEGATIVE_MASS: &str = "Mass cannot be negative. Please provide a posit
 const ERR_NEGATIVE_VOLUME: &str = "Volume cannot be negative. Please provide a positive value.";
 const ERR_UNSUPPORTED_ACTION: &str = "Unsupported action type";
 const ERR_CANNOT_PARSE_UNIT: &str = "Could not parse unit from text";
-use super::Feature;
+use super::{FeatureSync, FeatureAsync};
 use async_trait::async_trait;
 use serde_json::json;
 use once_cell::sync::Lazy;
 use regex::Regex;
 // use crate::shared::types::ConvertUnitResponse; // Removed invalid import
 
+#[derive(Clone)]
 pub struct UnitConverterFeature;
 
-#[async_trait]
-impl Feature for UnitConverterFeature {
+impl FeatureSync for UnitConverterFeature {
     fn id(&self) -> &'static str {
         "unit_converter"
     }
@@ -84,7 +84,10 @@ impl Feature for UnitConverterFeature {
     fn get_context_boost(&self, _captured_text: &str) -> std::collections::HashMap<String, f64> {
         std::collections::HashMap::new()
     }
+}
 
+#[async_trait]
+impl FeatureAsync for UnitConverterFeature {
     async fn execute_action(
         &self,
         action_type: &ActionType,

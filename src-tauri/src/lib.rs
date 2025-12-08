@@ -3,6 +3,7 @@ mod shared;
 mod api;
 mod core;
 mod system;
+mod config;
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -350,6 +351,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // Palette commands
             api::commands::palette::capture_selection,
+            api::commands::palette::get_command_index,
             api::commands::palette::get_command_items,
             api::commands::palette::execute_action,
             api::commands::palette::record_command_usage,
@@ -415,18 +417,13 @@ async fn show_widget_window_async(
         }
     }
     
-    // Define window dimensions
-    let (width, height, _title, _transparent, _decorations) = match widget {
-        "palette" => (550, 328, "Command Palette", true, false),
-        "clipboard" => (500, 400, "Clipboard History", false, false),
-        "translator" => (700, 550, "Translator", false, false),
-        "currency" => (500, 400, "Currency Converter", false, false),
-        "time_converter" => (600, 500, "Time Zone Converter", false, false),
-        "definition" => (400, 500, "Definition Lookup", false, false),
-        "text_analyser" => (600, 450, "Text Analyser", false, false),
-        "settings" => (800, 600, "Settings", false, false),
-        _ => (600, 400, "Widget", false, false),
-    };
+    // Get window configuration from registry (no hardcoded tuples)
+    let config = config::get_window_config(widget);
+    let width = config.width as u32;
+    let height = config.height as u32;
+    let _title = config.title;
+    let _transparent = config.transparent;
+    let _decorations = !config.resizable;
     
     // Check if window already exists
     if let Some(window) = app.get_webview_window(&window_label) {
@@ -520,17 +517,13 @@ fn show_widget_window_legacy(app: &tauri::AppHandle, widget: &str, has_selection
         }
     }
     
-    // Define window dimensions
-    let (width, height, _title, _transparent, _decorations) = match widget {
-        "palette" => (550, 328, "Command Palette", true, false),
-        "clipboard" => (500, 400, "Clipboard History", false, false),
-        "translator" => (700, 550, "Translator", false, false),  // Increased height
-        "currency" => (500, 400, "Currency Converter", false, false),  // Increased height
-        "time_converter" => (600, 500, "Time Zone Converter", false, false),
-        "definition" => (400, 500, "Definition Lookup", false, false),
-        "settings" => (800, 600, "Settings", false, false),
-        _ => (600, 400, "Widget", false, false),
-    };
+    // Get window configuration from registry (no hardcoded tuples)
+    let config = config::get_window_config(widget);
+    let width = config.width as u32;
+    let height = config.height as u32;
+    let _title = config.title;
+    let _transparent = config.transparent;
+    let _decorations = !config.resizable;
     
     // Check if window already exists
     if let Some(window) = app.get_webview_window(&window_label) {

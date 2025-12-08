@@ -5,14 +5,14 @@
 use crate::shared::types::*;
 use crate::shared::settings::AppSettings;
 use crate::core::context;
-use super::Feature;
+use super::{FeatureSync, FeatureAsync};
 use std::collections::HashMap;
 use async_trait::async_trait;
 
+#[derive(Clone)]
 pub struct CurrencyFeature;
 
-#[async_trait]
-impl Feature for CurrencyFeature {
+impl FeatureSync for CurrencyFeature {
     fn id(&self) -> &str {
         "currency"
     }
@@ -55,6 +55,32 @@ impl Feature for CurrencyFeature {
             .collect()
     }
     
+    fn get_context_boost(&self, captured_text: &str) -> HashMap<String, f64> {
+        let mut boost_map = HashMap::new();
+        
+        // Detect currency in text
+        if let Some(currency_info) = context::detect_currency(captured_text) {
+            println!("[Context] Detected currency: {} {}", currency_info.amount, currency_info.currency_code);
+            
+            // Boost currency widget
+            boost_map.insert("widget_currency".to_string(), 100.0);
+            
+            // Boost currency conversion actions
+            for id in &[
+                "convert_usd", "convert_eur", "convert_gbp", "convert_jpy",
+                "convert_aud", "convert_cad", "convert_chf", "convert_cny",
+                "convert_inr", "convert_mxn",
+            ] {
+                boost_map.insert(id.to_string(), 80.0);
+            }
+        }
+        
+        boost_map
+    }
+}
+
+#[async_trait]
+impl FeatureAsync for CurrencyFeature {
     async fn execute_action(
         &self,
         action: &ActionType,
@@ -106,29 +132,6 @@ impl Feature for CurrencyFeature {
                 "timestamp": response.timestamp,
             })),
         })
-    }
-    
-    fn get_context_boost(&self, captured_text: &str) -> HashMap<String, f64> {
-        let mut boost_map = HashMap::new();
-        
-        // Detect currency in text
-        if let Some(currency_info) = context::detect_currency(captured_text) {
-            println!("[Context] Detected currency: {} {}", currency_info.amount, currency_info.currency_code);
-            
-            // Boost currency widget
-            boost_map.insert("widget_currency".to_string(), 100.0);
-            
-            // Boost currency conversion actions
-            for id in &[
-                "convert_usd", "convert_eur", "convert_gbp", "convert_jpy",
-                "convert_aud", "convert_cad", "convert_chf", "convert_cny",
-                "convert_inr", "convert_mxn",
-            ] {
-                boost_map.insert(id.to_string(), 80.0);
-            }
-        }
-        
-        boost_map
     }
 }
 

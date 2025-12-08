@@ -4,10 +4,10 @@ use std::collections::HashMap;
 use unicode_segmentation::UnicodeSegmentation;
 use async_trait::async_trait;
 
+#[derive(Clone)]
 pub struct TextAnalyserFeature;
 
-#[async_trait]
-impl super::Feature for TextAnalyserFeature {
+impl super::FeatureSync for TextAnalyserFeature {
     fn id(&self) -> &str {
         "text_analyser"
     }
@@ -54,6 +54,19 @@ impl super::Feature for TextAnalyserFeature {
         ]
     }
 
+    fn get_context_boost(&self, captured_text: &str) -> HashMap<String, f64> {
+        let mut boost = HashMap::new();
+        // Boost if text is long enough to be worth analyzing
+        if captured_text.len() > 50 {
+            boost.insert("widget_analyser".to_string(), 40.0);
+            boost.insert("reading_time".to_string(), 35.0);
+        }
+        boost
+    }
+}
+
+#[async_trait]
+impl super::FeatureAsync for TextAnalyserFeature {
     async fn execute_action(&self, action: &ActionType, params: &serde_json::Value) -> crate::shared::error::AppResult<crate::shared::types::ExecuteActionResponse> {
         let text = params.get("text")
             .and_then(|t| t.as_str())
@@ -81,16 +94,6 @@ impl super::Feature for TextAnalyserFeature {
             result: result_text,
             metadata: Some(serde_json::to_value(analysis)?),
         })
-    }
-
-    fn get_context_boost(&self, captured_text: &str) -> HashMap<String, f64> {
-        let mut boost = HashMap::new();
-        // Boost if text is long enough to be worth analyzing
-        if captured_text.len() > 50 {
-            boost.insert("widget_analyser".to_string(), 40.0);
-            boost.insert("reading_time".to_string(), 35.0);
-        }
-        boost
     }
 }
 

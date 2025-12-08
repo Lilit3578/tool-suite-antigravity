@@ -7,17 +7,17 @@ use crate::core::clipboard::{ClipboardHistory, ClipboardMonitor};
 use crate::shared::types::ClipboardHistoryItem;
 use crate::core::context;
 use crate::system::automation;
-use super::Feature;
+use super::{FeatureSync, FeatureAsync};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use tauri::Manager;
 use crate::core::context::category::ContextCategory;
 
+#[derive(Clone)]
 pub struct ClipboardFeature;
 
-#[async_trait]
-impl Feature for ClipboardFeature {
+impl FeatureSync for ClipboardFeature {
     fn id(&self) -> &str {
         "clipboard"
     }
@@ -70,16 +70,19 @@ impl Feature for ClipboardFeature {
         ]
     }
     
+    fn get_context_boost(&self, _captured_text: &str) -> HashMap<String, f64> {
+        HashMap::new()
+    }
+}
+
+#[async_trait]
+impl FeatureAsync for ClipboardFeature {
     async fn execute_action(
         &self,
         _action: &ActionType,
         _params: &serde_json::Value,
     ) -> crate::shared::error::AppResult<ExecuteActionResponse> {
         Err(crate::shared::error::AppError::Feature("Clipboard feature doesn't support direct actions".to_string()))
-    }
-    
-    fn get_context_boost(&self, _captured_text: &str) -> HashMap<String, f64> {
-        HashMap::new()
     }
 }
 

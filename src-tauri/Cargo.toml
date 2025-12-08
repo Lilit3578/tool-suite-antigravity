@@ -43,6 +43,9 @@ thiserror = "1"
 rust_decimal = "1.33"
 evalexpr = "11"
 ts-rs = "10.0"
+enum_dispatch = "0.3"
+redb = "2"
+meval = "0.2"
 
 # macOS native window management
 [target.'cfg(target_os = "macos")'.dependencies]

@@ -2,10 +2,14 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::thread;
 use std::time::Duration;
 use cocoa::base::{id, nil};
-use cocoa::foundation::{NSString, NSUInteger};
+use cocoa::foundation::{NSString, NSUInteger, NSArray};
 use objc::{msg_send, sel, sel_impl, class};
+use objc::rc::autoreleasepool;
+use objc::runtime::Class;
+use std::ffi::CStr;
 use core_graphics::event::{CGEvent, CGEventTapLocation, CGEventFlags, CGKeyCode};
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+use crate::shared::errors::{CommandError, CommandResult};
 
 /// Circuit breaker for paste operations
 /// Tracks consecutive failures to prevent infinite retry loops
@@ -28,9 +32,9 @@ pub fn check_accessibility_permissions() -> bool {
 
 /// Get the name of the currently active application
 /// Uses NSWorkspace via Cocoa/ObjC
-pub fn get_active_app() -> Result<String, String> {
+pub fn get_active_app() -> CommandResult<String> {
     if !check_accessibility_permissions() {
-         return Err("Accessibility permissions not granted. Please enable in System Settings > Privacy & Security > Accessibility.".to_string());
+         return Err(CommandError::AccessibilityDenied);
     }
     
     unsafe {
@@ -38,7 +42,7 @@ pub fn get_active_app() -> Result<String, String> {
         let front_app: id = msg_send![workspace, frontmostApplication];
         
         if front_app == nil {
-            return Err("No frontmost application found".to_string());
+            return Err(CommandError::SystemIO("No frontmost application found".to_string()));
         }
         
         let name: id = msg_send![front_app, localizedName];
@@ -53,12 +57,12 @@ pub fn get_active_app() -> Result<String, String> {
 
 /// Restore focus to a specific application by name
 /// Iterates running applications to find match and activates it
-pub fn restore_focus(app_name: &str) -> Result<(), String> {
+pub fn restore_focus(app_name: &str) -> CommandResult<()> {
     println!("🔵 [DEBUG] [restore_focus] ========== RESTORE FOCUS CALLED ==========");
     println!("🔵 [DEBUG] [restore_focus] Target app: {}", app_name);
     
     if !check_accessibility_permissions() {
-        return Err("Accessibility permissions not granted.".to_string());
+        return Err(CommandError::AccessibilityDenied);
     }
 
     unsafe {
@@ -97,25 +101,25 @@ pub fn restore_focus(app_name: &str) -> Result<(), String> {
         } else {
             let msg = format!("Application '{}' not found running", app_name);
             eprintln!("[RestoreFocus] {}", msg);
-            Err(msg)
+            Err(CommandError::SystemIO(msg))
         }
     }
 }
 
 /// Helper to simulate a keystroke with modifiers
-fn simulate_keypress(key_code: CGKeyCode, flags: CGEventFlags) -> Result<(), String> {
+fn simulate_keypress(key_code: CGKeyCode, flags: CGEventFlags) -> CommandResult<()> {
     let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
-        .map_err(|_| "Failed to create CGEventSource".to_string())?;
+        .map_err(|_| CommandError::SystemIO("Failed to create CGEventSource".to_string()))?;
     
     // Key Down
     let key_down = CGEvent::new_keyboard_event(source.clone(), key_code, true)
-        .map_err(|_| "Failed to create key down event".to_string())?;
+        .map_err(|_| CommandError::SystemIO("Failed to create key down event".to_string()))?;
     key_down.set_flags(flags);
     key_down.post(CGEventTapLocation::HID);
     
     // Key Up
     let key_up = CGEvent::new_keyboard_event(source, key_code, false)
-        .map_err(|_| "Failed to create key up event".to_string())?;
+        .map_err(|_| CommandError::SystemIO("Failed to create key up event".to_string()))?;
     key_up.set_flags(flags);
     key_up.post(CGEventTapLocation::HID);
     
@@ -123,11 +127,12 @@ fn simulate_keypress(key_code: CGKeyCode, flags: CGEventFlags) -> Result<(), Str
 }
 
 /// Simulate Cmd+C (copy) using Core Graphics
-pub fn simulate_cmd_c() -> Result<(), String> {
+/// DEPRECATED: Use capture_selection() instead to avoid race conditions
+pub fn simulate_cmd_c() -> CommandResult<()> {
     println!("🔵 [DEBUG] [simulate_cmd_c] (Native) Triggering Cmd+C...");
     
     if !check_accessibility_permissions() {
-        return Err("Accessibility permissions not granted.".to_string());
+        return Err(CommandError::AccessibilityDenied);
     }
     
     simulate_keypress(K_VK_ANSI_C, CGEventFlags::CGEventFlagCommand)?;
@@ -140,9 +145,9 @@ pub fn simulate_cmd_c() -> Result<(), String> {
 }
 
 /// Simulate Cmd+V (paste) using Core Graphics
-pub fn simulate_cmd_v() -> Result<(), String> {
+pub fn simulate_cmd_v() -> CommandResult<()> {
     if !check_accessibility_permissions() {
-        return Err("Accessibility permissions not granted.".to_string());
+        return Err(CommandError::AccessibilityDenied);
     }
     
     simulate_keypress(K_VK_ANSI_V, CGEventFlags::CGEventFlagCommand)?;
@@ -150,11 +155,11 @@ pub fn simulate_cmd_v() -> Result<(), String> {
 }
 
 /// Auto-paste flow: Restore focus -> Wait -> Paste
-pub fn auto_paste_flow(app_name: &str, delay_ms: u64) -> Result<(), String> {
+pub fn auto_paste_flow(app_name: &str, delay_ms: u64) -> CommandResult<()> {
     // Check circuit breaker
     let failures = PASTE_FAILURE_COUNT.load(Ordering::Relaxed);
     if failures >= MAX_CONSECUTIVE_PASTE_FAILURES {
-        return Err(format!("Circuit breaker: Too many consecutive paste failures ({})", failures));
+        return Err(CommandError::SystemIO(format!("Circuit breaker: Too many consecutive paste failures ({})", failures)));
     }
     
     if let Err(e) = restore_focus(app_name) {
@@ -175,23 +180,463 @@ pub fn auto_paste_flow(app_name: &str, delay_ms: u64) -> Result<(), String> {
     Ok(())
 }
 
-/// Smart selection detection (same logic, using new native helpers)
-pub async fn detect_text_selection(_app: &tauri::AppHandle) -> Result<(bool, Option<String>), String> {
-    use cli_clipboard::{ClipboardContext, ClipboardProvider};
-    
-    let state_a = ClipboardContext::new()
-        .and_then(|mut ctx| ctx.get_contents())
-        .map_err(|e| e.to_string())?;
+/// Put system to sleep using IOKit (native API, no shell commands)
+/// 
+/// SAFETY: This function uses unsafe blocks to call private macOS frameworks.
+/// It directly interfaces with IOKit to send sleep commands to the system.
+pub fn sleep_system() -> CommandResult<()> {
+    #[link(name = "IOKit", kind = "framework")]
+    extern "C" {
+        fn IOPMSleepSystem();
+    }
+
+    unsafe {
+        IOPMSleepSystem();
+    }
+    Ok(())
+}
+
+/// Lock screen using ScreenSaver framework (native API, no shell commands)
+/// 
+/// SAFETY: This function uses unsafe blocks to call macOS ScreenSaver framework.
+/// It directly requests the screen saver to start, which locks the screen.
+pub fn lock_screen() -> CommandResult<()> {
+    unsafe {
+        let screen_saver: id = msg_send![class!(NSScreenSaver), sharedScreenSaver];
+        if screen_saver == nil {
+            return Err(CommandError::SystemIO("Failed to get NSScreenSaver instance".to_string()));
+        }
         
-    simulate_cmd_c()?;
-    
-    thread::sleep(Duration::from_millis(150));
-    
-    let state_b = ClipboardContext::new()
-        .and_then(|mut ctx| ctx.get_contents())
-        .map_err(|e| e.to_string())?;
+        let _: () = msg_send![screen_saver, lockScreen];
+    }
+    Ok(())
+}
+
+// Constants for deep-search selection strategy
+const MAX_RECURSION_DEPTH: u8 = 3;
+const MAX_CLIPBOARD_POLL_ATTEMPTS: u8 = 20;
+const CLIPBOARD_POLL_INTERVAL_MS: u64 = 50;
+
+/// Capture selected text using macOS Accessibility API with Deep-Search Selection Strategy
+/// 
+/// Strategy:
+/// 1. Recursive AX Tree Walk: Searches nested UI elements (depth 3) to find selected text
+///    - Works with Chrome/Electron where focused element is a container
+/// 2. Transactional "Ghost" Copy Fallback: If AX fails, simulates Cmd+C and polls clipboard
+///    - Waits for clipboard change count to increment before reading
+///    - Optionally restores previous clipboard content
+pub fn capture_selection() -> CommandResult<Option<String>> {
+    // Use catch_unwind to prevent panics from crashing the app
+    let result = std::panic::catch_unwind(|| {
+        if !check_accessibility_permissions() {
+            return Err(CommandError::AccessibilityDenied);
+        }
+
+        // Step 1: Try Native AX API (Deep Search)
+        println!("[CaptureSelection] 🔍 Attempting recursive AX tree walk...");
+        match get_ax_selection_recursive() {
+            Ok(Some(text)) => {
+                println!("[CaptureSelection] ✅ Success via AX API (recursive search)");
+                return Ok(Some(text));
+            }
+            Ok(None) => {
+                println!("[CaptureSelection] ⚠️  AX search returned None, falling back...");
+            }
+            Err(e) => {
+                println!("[CaptureSelection] ⚠️  AX search error: {:?}, falling back...", e);
+            }
+        }
+
+        // Step 2: Fallback: Transactional "Ghost" Copy
+        println!("[CaptureSelection] ⚠️  Falling back to simulated copy...");
+        match capture_via_simulated_copy() {
+            Ok(Some(text)) => {
+                println!("[CaptureSelection] ✅ Success via fallback (simulated copy)");
+                Ok(Some(text))
+            }
+            Ok(None) => {
+                println!("[CaptureSelection] ❌ No text captured via fallback");
+                Ok(None)
+            }
+            Err(e) => {
+                println!("[CaptureSelection] ❌ Fallback error: {:?}", e);
+                Err(e)
+            }
+        }
+    });
+
+    match result {
+        Ok(res) => res,
+        Err(_) => {
+            eprintln!("[CaptureSelection] ❌ PANIC caught in capture_selection!");
+            Err(CommandError::SystemIO("Internal error: panic in capture_selection".to_string()))
+        }
+    }
+}
+
+/// Recursive AX tree walk to find selected text in nested UI elements
+/// 
+/// Searches the focused element and all its children up to MAX_RECURSION_DEPTH.
+/// This handles cases where the focused element is a container (e.g., Chrome/Electron).
+fn get_ax_selection_recursive() -> CommandResult<Option<String>> {
+    unsafe {
+        #[link(name = "ApplicationServices", kind = "framework")]
+        extern "C" {
+            fn AXUIElementCreateSystemWide() -> id;
+            fn AXUIElementCopyAttributeValue(
+                element: id,
+                attribute: id,
+                value: *mut id,
+            ) -> i32;
+            fn CFRelease(cf: id);
+        }
+
+        // Constants for Accessibility API
+        let kAXFocusedApplicationAttribute = cocoa::foundation::NSString::alloc(nil)
+            .init_str("AXFocusedApplication");
+        let kAXFocusedUIElementAttribute = cocoa::foundation::NSString::alloc(nil)
+            .init_str("AXFocusedUIElement");
+
+        let system_element = AXUIElementCreateSystemWide();
+        if system_element == nil {
+            return Err(CommandError::SystemIO("Failed to create system-wide accessibility element".to_string()));
+        }
+
+        // Get focused application
+        let mut focused_app: id = nil;
+        let app_result = AXUIElementCopyAttributeValue(
+            system_element,
+            kAXFocusedApplicationAttribute,
+            &mut focused_app,
+        );
+
+        if app_result != 0 || focused_app == nil {
+            // No focused application or permission denied
+            // system_element is created by AXUIElementCreateSystemWide, must be released
+            if system_element != nil {
+                CFRelease(system_element);
+            }
+            return Ok(None);
+        }
+
+        // Get focused UI element within the application
+        let mut focused_element: id = nil;
+        let element_result = AXUIElementCopyAttributeValue(
+            focused_app,
+            kAXFocusedUIElementAttribute,
+            &mut focused_element,
+        );
+
+        if element_result != 0 || focused_element == nil {
+            // No focused element - release what we have
+            // focused_app and system_element are AXUIElementRef, must be released
+            if focused_app != nil {
+                CFRelease(focused_app);
+            }
+            if system_element != nil {
+                CFRelease(system_element);
+            }
+            return Ok(None);
+        }
+
+        // Start recursive search from focused element
+        let result = find_selection_in_element(focused_element, MAX_RECURSION_DEPTH);
         
-    let has_selection = state_b != state_a && !state_b.trim().is_empty();
-    
-    Ok((has_selection, if has_selection { Some(state_b) } else { None }))
+        // Release AXUIElementRef objects we got from CopyAttributeValue
+        // These are CoreFoundation types, not Objective-C objects
+        if focused_element != nil {
+            CFRelease(focused_element);
+        }
+        if focused_app != nil {
+            CFRelease(focused_app);
+        }
+        if system_element != nil {
+            CFRelease(system_element);
+        }
+        
+        result
+    }
+}
+
+/// Recursively search for selected text in an element and its children
+/// 
+/// # Arguments
+/// * `element` - The AXUIElement to search
+/// * `depth` - Remaining recursion depth (stops at 0)
+/// 
+/// # Returns
+/// * `Some(String)` if selected text is found
+/// * `None` if not found or depth limit reached
+fn find_selection_in_element(element: id, depth: u8) -> CommandResult<Option<String>> {
+    if element == nil {
+        return Ok(None);
+    }
+
+    // Safety: All AX API calls are wrapped in unsafe, but we validate pointers before use
+    unsafe {
+        #[link(name = "ApplicationServices", kind = "framework")]
+        extern "C" {
+            fn AXUIElementCopyAttributeValue(
+                element: id,
+                attribute: id,
+                value: *mut id,
+            ) -> i32;
+            fn CFRelease(cf: id);
+        }
+
+        // Constants
+        let kAXSelectedTextAttribute = cocoa::foundation::NSString::alloc(nil)
+            .init_str("AXSelectedText");
+        let kAXChildrenAttribute = cocoa::foundation::NSString::alloc(nil)
+            .init_str("AXChildren");
+
+        // Step 1: Check if current element has selected text
+        let mut selected_text: id = nil;
+        let text_result = AXUIElementCopyAttributeValue(
+            element,
+            kAXSelectedTextAttribute,
+            &mut selected_text,
+        );
+
+        // Handle selected_text result
+        // Note: selected_text is an NSString (Objective-C object) returned by AX API
+        // It's managed by autoreleasepool, so we MUST NOT call CFRelease on it
+        if text_result == 0 && selected_text != nil {
+            // Success - try to extract text
+            let utf8_ptr = NSString::UTF8String(selected_text);
+            if utf8_ptr != std::ptr::null() {
+                // Safe conversion - UTF8String returns a pointer to internal buffer
+                // We don't own this pointer, so we just read from it
+                let text = match std::ffi::CStr::from_ptr(utf8_ptr).to_str() {
+                    Ok(s) => s.to_string(),
+                    Err(_) => {
+                        // Invalid UTF-8, try lossy conversion
+                        std::ffi::CStr::from_ptr(utf8_ptr).to_string_lossy().into_owned()
+                    }
+                };
+
+                // DO NOT release selected_text - it's an Objective-C object managed by autoreleasepool
+
+                if !text.trim().is_empty() {
+                    println!("[FindSelection] ✅ Found selected text at depth {} (length: {})", 
+                        MAX_RECURSION_DEPTH - depth, text.len());
+                    return Ok(Some(text));
+                }
+            }
+        }
+
+        // Step 2: If depth > 0, search children recursively
+        if depth == 0 {
+            return Ok(None);
+        }
+
+        // Get children
+        let mut children: id = nil;
+        let children_result = AXUIElementCopyAttributeValue(
+            element,
+            kAXChildrenAttribute,
+            &mut children,
+        );
+
+        if children_result != 0 || children == nil {
+            return Ok(None);
+        }
+
+        // Iterate through children using CFArray functions
+        // Note: children is an NSArray (Objective-C object) returned by AX API
+        // It's managed by autoreleasepool, so we MUST NOT call CFRelease on it
+        #[link(name = "CoreFoundation", kind = "framework")]
+        extern "C" {
+            fn CFArrayGetCount(theArray: id) -> usize;
+            fn CFArrayGetValueAtIndex(theArray: id, idx: usize) -> id;
+        }
+        
+        let mut result: Option<String> = None;
+        
+        // Safely get count and iterate
+        if children != nil {
+            let count = CFArrayGetCount(children);
+            
+            // Limit iteration to prevent infinite loops
+            let max_iterations = count.min(1000); // Safety limit
+            
+            for i in 0..max_iterations {
+                let child = CFArrayGetValueAtIndex(children, i);
+                if child != nil {
+                    // Recursively search child
+                    // Note: child is an AXUIElementRef (CoreFoundation type), not owned here
+                    match find_selection_in_element(child, depth - 1) {
+                        Ok(Some(text)) => {
+                            result = Some(text);
+                            break;
+                        }
+                        Err(e) => {
+                            // Log error but continue searching other children
+                            eprintln!("[FindSelection] Error searching child {}: {:?}", i, e);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            
+            // DO NOT release children - it's an Objective-C NSArray managed by autoreleasepool
+        }
+        
+        Ok(result)
+    }
+}
+
+/// Fallback: Capture text via simulated Cmd+C with clipboard polling
+/// 
+/// Memory-safe implementation wrapped in autoreleasepool to prevent leaks/crashes
+/// Uses correct NSString class reference to avoid nil pointer crashes
+fn capture_via_simulated_copy() -> CommandResult<Option<String>> {
+    // Wrap EVERYTHING in an autoreleasepool to prevent leaks/crashes
+    autoreleasepool(|| {
+        unsafe {
+            #[link(name = "CoreGraphics", kind = "framework")]
+            extern "C" {
+                fn CGEventSourceCreate(stateID: u32) -> id;
+                fn CGEventCreateKeyboardEvent(source: id, keyCode: u16, keyDown: bool) -> id;
+                fn CGEventSetFlags(event: id, flags: u64);
+                fn CGEventPost(tap: u32, event: id) -> ();
+            }
+
+            #[link(name = "CoreFoundation", kind = "framework")]
+            extern "C" {
+                fn CFRelease(cf: id);
+            }
+
+            // Step 1: Get initial count safely
+            let pb: id = msg_send![class!(NSPasteboard), generalPasteboard];
+            if pb == nil {
+                return Err(CommandError::SystemIO("Failed to get NSPasteboard".to_string()));
+            }
+
+            let start_count: NSUInteger = msg_send![pb, changeCount];
+            println!("[CaptureViaCopy] Initial clipboard change count: {}", start_count);
+
+            // Step 2: Simulate Cmd+C (isolate in block)
+            {
+                // CGEventSourceStateID::HIDSystemState = 1
+                let source = CGEventSourceCreate(1);
+                if source == nil {
+                    return Err(CommandError::SystemIO("Failed to create CGEventSource".to_string()));
+                }
+
+                // CMD key code = 0x37, 'C' key code = 0x08
+                // CGEventFlagCommand = 0x100000
+                // CGEventTapLocation::HIDEventTap = 0
+
+                // CMD DOWN
+                let cmd_down = CGEventCreateKeyboardEvent(source, 0x37, true);
+                if cmd_down != nil {
+                    CGEventSetFlags(cmd_down, 0x100000);
+                    CGEventPost(0, cmd_down);
+                    CFRelease(cmd_down); // SAFE: CGEventRef must be released
+                }
+
+                // 'C' DOWN
+                let c_down = CGEventCreateKeyboardEvent(source, 0x08, true);
+                if c_down != nil {
+                    CGEventSetFlags(c_down, 0x100000);
+                    CGEventPost(0, c_down);
+                    CFRelease(c_down); // SAFE
+                }
+
+                // 'C' UP
+                let c_up = CGEventCreateKeyboardEvent(source, 0x08, false);
+                if c_up != nil {
+                    CGEventSetFlags(c_up, 0x100000);
+                    CGEventPost(0, c_up);
+                    CFRelease(c_up); // SAFE
+                }
+
+                // CMD UP
+                let cmd_up = CGEventCreateKeyboardEvent(source, 0x37, false);
+                if cmd_up != nil {
+                    CGEventPost(0, cmd_up);
+                    CFRelease(cmd_up); // SAFE
+                }
+
+                CFRelease(source); // SAFE: CGEventSourceRef must be released
+            }
+
+            println!("[CaptureViaCopy] Polling for clipboard change...");
+
+            // Step 3: Polling Loop
+            for attempt in 1..=MAX_CLIPBOARD_POLL_ATTEMPTS {
+                thread::sleep(Duration::from_millis(CLIPBOARD_POLL_INTERVAL_MS));
+
+                // Re-acquire pasteboard inside pool
+                let pb: id = msg_send![class!(NSPasteboard), generalPasteboard];
+                if pb == nil {
+                    continue;
+                }
+
+                let new_count: NSUInteger = msg_send![pb, changeCount];
+
+                if new_count > start_count {
+                    println!("[CaptureViaCopy] ✅ Clipboard changed detected!");
+
+                    // CORRECT WAY to get NSString Class
+                    let ns_string_class = class!(NSString);
+                    
+                    // Create array with the actual Class object
+                    // Class is a pointer type, so we can use it directly
+                    let classes: id = msg_send![class!(NSArray), arrayWithObject:ns_string_class as *const _ as id];
+                    if classes == nil {
+                        eprintln!("[CaptureViaCopy] ⚠️ Failed to create NSArray");
+                        return Ok(None);
+                    }
+
+                    let strings: id = msg_send![pb, readObjectsForClasses:classes options:nil];
+                    if strings == nil {
+                        eprintln!("[CaptureViaCopy] ⚠️ Failed to read clipboard objects");
+                        return Ok(None);
+                    }
+
+                    let count: NSUInteger = msg_send![strings, count];
+                    if count > 0 {
+                        let ns_str: id = msg_send![strings, objectAtIndex:0];
+
+                        // Safety Checks
+                        if ns_str == nil {
+                            println!("[CaptureViaCopy] ⚠️ Initial object is nil");
+                            return Ok(None);
+                        }
+
+                        let utf8_ptr = NSString::UTF8String(ns_str);
+                        if utf8_ptr == std::ptr::null() {
+                            println!("[CaptureViaCopy] ⚠️ UTF8String returned NULL");
+                            return Ok(None);
+                        }
+
+                        let rust_str = CStr::from_ptr(utf8_ptr).to_string_lossy().into_owned();
+                        
+                        if !rust_str.trim().is_empty() {
+                            println!("[CaptureViaCopy] Captured text (length: {})", rust_str.len());
+                            return Ok(Some(rust_str));
+                        }
+                    }
+                    return Ok(None);
+                }
+
+                if attempt == MAX_CLIPBOARD_POLL_ATTEMPTS {
+                    println!("[CaptureViaCopy] ❌ Timeout waiting for clipboard");
+                }
+            }
+
+            Ok(None)
+        }
+    })
+}
+
+/// Smart selection detection (legacy - uses Accessibility API)
+pub async fn detect_text_selection(_app: &tauri::AppHandle) -> CommandResult<(bool, Option<String>)> {
+    match capture_selection() {
+        Ok(Some(text)) => Ok((true, Some(text))),
+        Ok(None) => Ok((false, None)),
+        Err(e) => Err(e),
+    }
 }

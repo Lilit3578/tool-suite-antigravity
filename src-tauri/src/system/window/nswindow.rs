@@ -27,18 +27,23 @@ use block::ConcreteBlock;
 #[cfg(target_os = "macos")]
 use std::sync::{Arc, Mutex, mpsc};
 
-// NSWindow level constants
+// Use semantic window level constants (no magic numbers)
+// These values are from NSWindow.h and ensure compatibility across OS versions
 // NSStatusWindowLevel = 25 (menu bar level - appears over full-screen apps)
+// NSMainMenuWindowLevel = 24 (main menu bar level)  
+// NSPopUpMenuWindowLevel = 101 (pop-up menu level - highest priority)
+// NSFloatingWindowLevel = 3 (floating window level)
 #[cfg(target_os = "macos")]
 const NS_STATUS_WINDOW_LEVEL: i64 = 25;
 
-// NSMainMenuWindowLevel = 24 (main menu bar level)
 #[cfg(target_os = "macos")]
 const NS_MAIN_MENU_WINDOW_LEVEL: i64 = 24;
 
-// NSPopUpMenuWindowLevel = 101 (pop-up menu level - NUCLEAR OPTION for guaranteed visibility)
 #[cfg(target_os = "macos")]
 const NS_POPUP_MENU_WINDOW_LEVEL: i64 = 101;
+
+#[cfg(target_os = "macos")]
+const NS_FLOATING_WINDOW_LEVEL: i64 = 3;
 
 // NSApplicationActivationPolicy constants
 // These control whether the app appears in the Dock and how it activates

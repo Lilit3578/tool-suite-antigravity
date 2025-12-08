@@ -7,7 +7,7 @@ use chrono::{DateTime, Local, TimeZone, Utc, Offset};
 use chrono_tz::Tz;
 use chrono_english::{parse_date_string, Dialect};
 use crate::shared::types::{ConvertTimeRequest, ConvertTimeResponse, TimezoneInfo, ParsedTimeInput, CommandItem, ActionType, ExecuteActionResponse};
-use super::Feature;
+use super::{FeatureSync, FeatureAsync};
 use std::collections::HashMap;
 use regex::Regex;
 use async_trait::async_trait;
@@ -112,10 +112,10 @@ const TIMEZONE_ABBREVIATIONS: &[(&str, &str)] = &[
     ("SCT", "Indian/Mahe"),
 ];
 
+#[derive(Clone)]
 pub struct TimeConverterFeature;
 
-#[async_trait]
-impl Feature for TimeConverterFeature {
+impl FeatureSync for TimeConverterFeature {
     fn id(&self) -> &str {
         "time_converter"
     }
@@ -135,6 +135,13 @@ impl Feature for TimeConverterFeature {
         generate_timezone_commands()
     }
     
+    fn get_context_boost(&self, _captured_text: &str) -> HashMap<String, f64> {
+        HashMap::new()
+    }
+}
+
+#[async_trait]
+impl FeatureAsync for TimeConverterFeature {
     async fn execute_action(
         &self,
         action: &ActionType,
@@ -187,10 +194,6 @@ impl Feature for TimeConverterFeature {
             }
             _ => Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
         }
-    }
-    
-    fn get_context_boost(&self, _captured_text: &str) -> HashMap<String, f64> {
-        HashMap::new()
     }
 }
 

@@ -5,14 +5,14 @@
 use crate::shared::types::*;
 use crate::shared::settings::AppSettings;
 use crate::core::context;
-use super::Feature;
+use super::{FeatureSync, FeatureAsync};
 use std::collections::HashMap;
 use async_trait::async_trait;
 
+#[derive(Clone)]
 pub struct TranslatorFeature;
 
-#[async_trait]
-impl Feature for TranslatorFeature {
+impl FeatureSync for TranslatorFeature {
     fn id(&self) -> &str {
         "translator"
     }
@@ -29,48 +29,72 @@ impl Feature for TranslatorFeature {
     }
     
     fn action_commands(&self) -> Vec<CommandItem> {
-        let translations = vec![
-            ("translate_en", "Translate to English", ActionType::TranslateEn),
-            ("translate_zh", "Translate to Chinese (Mandarin)", ActionType::TranslateZh),
-            ("translate_es", "Translate to Spanish", ActionType::TranslateEs),
-            ("translate_fr", "Translate to French", ActionType::TranslateFr),
-            ("translate_de", "Translate to German", ActionType::TranslateDe),
-            ("translate_ar", "Translate to Arabic", ActionType::TranslateAr),
-            ("translate_pt", "Translate to Portuguese", ActionType::TranslatePt),
-            ("translate_ru", "Translate to Russian", ActionType::TranslateRu),
-            ("translate_ja", "Translate to Japanese", ActionType::TranslateJa),
-            ("translate_hi", "Translate to Hindi", ActionType::TranslateHi),
-            ("translate_it", "Translate to Italian", ActionType::TranslateIt),
-            ("translate_nl", "Translate to Dutch", ActionType::TranslateNl),
-            ("translate_pl", "Translate to Polish", ActionType::TranslatePl),
-            ("translate_tr", "Translate to Turkish", ActionType::TranslateTr),
-            ("translate_hy", "Translate to Armenian", ActionType::TranslateHy),
-            ("translate_fa", "Translate to Persian", ActionType::TranslateFa),
-            ("translate_vi", "Translate to Vietnamese", ActionType::TranslateVi),
-            ("translate_id", "Translate to Indonesian", ActionType::TranslateId),
-            ("translate_ko", "Translate to Korean", ActionType::TranslateKo),
-            ("translate_bn", "Translate to Bengali", ActionType::TranslateBn),
-            ("translate_ur", "Translate to Urdu", ActionType::TranslateUr),
-            ("translate_th", "Translate to Thai", ActionType::TranslateTh),
-            ("translate_sv", "Translate to Swedish", ActionType::TranslateSv),
-            ("translate_da", "Translate to Danish", ActionType::TranslateDa),
-            ("translate_fi", "Translate to Finnish", ActionType::TranslateFi),
-            ("translate_hu", "Translate to Hungarian", ActionType::TranslateHu),
-        ];
-        
-        translations
-            .into_iter()
-            .map(|(id, label, action_type)| CommandItem {
-                id: id.to_string(),
-                label: label.to_string(),
-                description: None,
-                action_type: Some(action_type),
-                widget_type: None,
-                category: None, // Will be assigned in get_all_command_items()
-            })
-            .collect()
+        // 26 translation language actions
+        vec![
+            CommandItem { id: "translate_en".to_string(), label: "Translate to English".to_string(), description: Some("Translate selected text to English".to_string()), action_type: Some(ActionType::TranslateEn), widget_type: None, category: None },
+            CommandItem { id: "translate_zh".to_string(), label: "Translate to Chinese".to_string(), description: Some("Translate selected text to Chinese".to_string()), action_type: Some(ActionType::TranslateZh), widget_type: None, category: None },
+            CommandItem { id: "translate_es".to_string(), label: "Translate to Spanish".to_string(), description: Some("Translate selected text to Spanish".to_string()), action_type: Some(ActionType::TranslateEs), widget_type: None, category: None },
+            CommandItem { id: "translate_fr".to_string(), label: "Translate to French".to_string(), description: Some("Translate selected text to French".to_string()), action_type: Some(ActionType::TranslateFr), widget_type: None, category: None },
+            CommandItem { id: "translate_de".to_string(), label: "Translate to German".to_string(), description: Some("Translate selected text to German".to_string()), action_type: Some(ActionType::TranslateDe), widget_type: None, category: None },
+            CommandItem { id: "translate_ar".to_string(), label: "Translate to Arabic".to_string(), description: Some("Translate selected text to Arabic".to_string()), action_type: Some(ActionType::TranslateAr), widget_type: None, category: None },
+            CommandItem { id: "translate_pt".to_string(), label: "Translate to Portuguese".to_string(), description: Some("Translate selected text to Portuguese".to_string()), action_type: Some(ActionType::TranslatePt), widget_type: None, category: None },
+            CommandItem { id: "translate_ru".to_string(), label: "Translate to Russian".to_string(), description: Some("Translate selected text to Russian".to_string()), action_type: Some(ActionType::TranslateRu), widget_type: None, category: None },
+            CommandItem { id: "translate_ja".to_string(), label: "Translate to Japanese".to_string(), description: Some("Translate selected text to Japanese".to_string()), action_type: Some(ActionType::TranslateJa), widget_type: None, category: None },
+            CommandItem { id: "translate_hi".to_string(), label: "Translate to Hindi".to_string(), description: Some("Translate selected text to Hindi".to_string()), action_type: Some(ActionType::TranslateHi), widget_type: None, category: None },
+            CommandItem { id: "translate_it".to_string(), label: "Translate to Italian".to_string(), description: Some("Translate selected text to Italian".to_string()), action_type: Some(ActionType::TranslateIt), widget_type: None, category: None },
+            CommandItem { id: "translate_nl".to_string(), label: "Translate to Dutch".to_string(), description: Some("Translate selected text to Dutch".to_string()), action_type: Some(ActionType::TranslateNl), widget_type: None, category: None },
+            CommandItem { id: "translate_pl".to_string(), label: "Translate to Polish".to_string(), description: Some("Translate selected text to Polish".to_string()), action_type: Some(ActionType::TranslatePl), widget_type: None, category: None },
+            CommandItem { id: "translate_tr".to_string(), label: "Translate to Turkish".to_string(), description: Some("Translate selected text to Turkish".to_string()), action_type: Some(ActionType::TranslateTr), widget_type: None, category: None },
+            CommandItem { id: "translate_hy".to_string(), label: "Translate to Armenian".to_string(), description: Some("Translate selected text to Armenian".to_string()), action_type: Some(ActionType::TranslateHy), widget_type: None, category: None },
+            CommandItem { id: "translate_fa".to_string(), label: "Translate to Persian".to_string(), description: Some("Translate selected text to Persian".to_string()), action_type: Some(ActionType::TranslateFa), widget_type: None, category: None },
+            CommandItem { id: "translate_vi".to_string(), label: "Translate to Vietnamese".to_string(), description: Some("Translate selected text to Vietnamese".to_string()), action_type: Some(ActionType::TranslateVi), widget_type: None, category: None },
+            CommandItem { id: "translate_id".to_string(), label: "Translate to Indonesian".to_string(), description: Some("Translate selected text to Indonesian".to_string()), action_type: Some(ActionType::TranslateId), widget_type: None, category: None },
+            CommandItem { id: "translate_ko".to_string(), label: "Translate to Korean".to_string(), description: Some("Translate selected text to Korean".to_string()), action_type: Some(ActionType::TranslateKo), widget_type: None, category: None },
+            CommandItem { id: "translate_bn".to_string(), label: "Translate to Bengali".to_string(), description: Some("Translate selected text to Bengali".to_string()), action_type: Some(ActionType::TranslateBn), widget_type: None, category: None },
+            CommandItem { id: "translate_ur".to_string(), label: "Translate to Urdu".to_string(), description: Some("Translate selected text to Urdu".to_string()), action_type: Some(ActionType::TranslateUr), widget_type: None, category: None },
+            CommandItem { id: "translate_th".to_string(), label: "Translate to Thai".to_string(), description: Some("Translate selected text to Thai".to_string()), action_type: Some(ActionType::TranslateTh), widget_type: None, category: None },
+            CommandItem { id: "translate_sv".to_string(), label: "Translate to Swedish".to_string(), description: Some("Translate selected text to Swedish".to_string()), action_type: Some(ActionType::TranslateSv), widget_type: None, category: None },
+            CommandItem { id: "translate_da".to_string(), label: "Translate to Danish".to_string(), description: Some("Translate selected text to Danish".to_string()), action_type: Some(ActionType::TranslateDa), widget_type: None, category: None },
+            CommandItem { id: "translate_fi".to_string(), label: "Translate to Finnish".to_string(), description: Some("Translate selected text to Finnish".to_string()), action_type: Some(ActionType::TranslateFi), widget_type: None, category: None },
+            CommandItem { id: "translate_hu".to_string(), label: "Translate to Hungarian".to_string(), description: Some("Translate selected text to Hungarian".to_string()), action_type: Some(ActionType::TranslateHu), widget_type: None, category: None },
+        ]
     }
     
+    fn get_context_boost(&self, captured_text: &str) -> HashMap<String, f64> {
+        let mut boost_map = HashMap::new();
+        
+        // Detect language in text
+        if let Some(lang_code) = context::detect_language(captured_text) {
+            println!("[Context] Detected language: {}", lang_code);
+            
+            // Boost translator widget
+            boost_map.insert("widget_translator".to_string(), 100.0);
+            
+            // Boost translation actions (especially if not English)
+            if lang_code != "en" {
+                boost_map.insert("translate_en".to_string(), 90.0);
+            }
+            
+            // Boost all translation actions moderately
+            for id in &[
+                "translate_en", "translate_zh", "translate_es", "translate_fr",
+                "translate_de", "translate_ar", "translate_pt", "translate_ru",
+                "translate_ja", "translate_hi", "translate_it", "translate_nl",
+                "translate_pl", "translate_tr", "translate_hy", "translate_fa",
+                "translate_vi", "translate_id", "translate_ko", "translate_bn",
+                "translate_ur", "translate_th", "translate_sv", "translate_da",
+                "translate_fi", "translate_hu",
+            ] {
+                boost_map.insert(id.to_string(), 60.0);
+            }
+        }
+        
+        boost_map
+    }
+}
+
+#[async_trait]
+impl FeatureAsync for TranslatorFeature {
     async fn execute_action(
         &self,
         action: &ActionType,
@@ -130,38 +154,6 @@ impl Feature for TranslatorFeature {
                 "detected_lang": response.detected_source_lang,
             })),
         })
-    }
-    
-    fn get_context_boost(&self, captured_text: &str) -> HashMap<String, f64> {
-        let mut boost_map = HashMap::new();
-        
-        // Detect language in text
-        if let Some(lang_code) = context::detect_language(captured_text) {
-            println!("[Context] Detected language: {}", lang_code);
-            
-            // Boost translator widget
-            boost_map.insert("widget_translator".to_string(), 100.0);
-            
-            // Boost translation actions (especially if not English)
-            if lang_code != "en" {
-                boost_map.insert("translate_en".to_string(), 90.0);
-            }
-            
-            // Boost all translation actions moderately
-            for id in &[
-                "translate_en", "translate_zh", "translate_es", "translate_fr",
-                "translate_de", "translate_ar", "translate_pt", "translate_ru",
-                "translate_ja", "translate_hi", "translate_it", "translate_nl",
-                "translate_pl", "translate_tr", "translate_hy", "translate_fa",
-                "translate_vi", "translate_id", "translate_ko", "translate_bn",
-                "translate_ur", "translate_th", "translate_sv", "translate_da",
-                "translate_fi", "translate_hu",
-            ] {
-                boost_map.insert(id.to_string(), 60.0);
-            }
-        }
-        
-        boost_map
     }
 }
 

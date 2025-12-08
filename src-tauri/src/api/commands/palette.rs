@@ -11,6 +11,7 @@ use crate::core::context;
 use crate::core::features;
 use tauri::Manager;
 use tauri_plugin_clipboard_manager::ClipboardExt;
+use serde_json;
 
 /// Capture selected text from the active application
 #[tauri::command]
@@ -112,32 +113,53 @@ pub async fn capture_selection(app: tauri::AppHandle, mode: Option<String>) -> A
     }
 }
 
-/// Get all available command items with intelligent ranking
+/// Get the complete command index with usage weights
+/// 
+/// This returns ALL commands with their usage weights for frontend-side search.
+/// The frontend handles fuzzy search/filtering using cmdk or Fuse.js.
+/// This eliminates N+1 IPC queries during search.
 #[tauri::command]
-pub async fn get_command_items(
+pub async fn get_command_index(
     _app: tauri::AppHandle,
     metrics: tauri::State<'_, context::UsageMetrics>,
-    captured_text: Option<String>,
 ) -> AppResult<Vec<CommandItem>> {
     // Get all command items from features
     let items = features::get_all_command_items();
     
-    // Apply context-aware ranking if we have captured text
-    let context_boost = if let Some(ref text) = captured_text {
-        Some(features::get_context_boost(text))
-    } else {
-        None
-    };
-    
-    // Rank commands using usage metrics and context
+    // Apply usage-based ranking (no context boost - frontend handles that)
     let ranked_items = context::rank_commands(
         items,
         |cmd| cmd.id.clone(),
         &metrics,
-        context_boost,
+        None, // No context boost - frontend handles search
     );
     
     Ok(ranked_items)
+}
+
+/// Get command items (backward compatibility - calls get_command_index)
+/// 
+/// This maintains compatibility with existing frontend code.
+/// Returns format: { commands: Vec<CommandItem>, detected_context?: ContextCategory }
+#[tauri::command]
+pub async fn get_command_items(
+    _app: tauri::AppHandle,
+    metrics: tauri::State<'_, context::UsageMetrics>,
+    _captured_text: Option<String>,
+) -> AppResult<serde_json::Value> {
+    println!("[get_command_items] Called - getting all commands");
+    // Just call get_command_index - frontend handles filtering
+    let items = get_command_index(_app, metrics).await?;
+    
+    println!("[get_command_items] ✅ Returning {} commands", items.len());
+    for (i, item) in items.iter().take(10).enumerate() {
+        println!("[get_command_items]   {}. {} ({})", i + 1, item.label, item.id);
+    }
+    
+    // Return in format expected by frontend: { commands: [...], detected_context?: ... }
+    Ok(serde_json::json!({
+        "commands": items
+    }))
 }
 
 /// Execute an action

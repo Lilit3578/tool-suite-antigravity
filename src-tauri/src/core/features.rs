@@ -1,12 +1,12 @@
-//! Feature plugin system
+//! Feature plugin system with enum dispatch
 //!
-//! Provides a trait-based plugin architecture for features. Each feature
-//! (translator, currency, clipboard, etc.) implements the `Feature` trait
-//! to provide widgets and actions to the command palette.
+//! Uses enum_dispatch for zero-cost abstraction and static dispatch.
+//! Replaces trait objects (Box<dyn Feature>) with enum variants for better performance.
 
 use crate::shared::types::{ActionType, CommandItem, ExecuteActionRequest, ExecuteActionResponse};
 use crate::core::context::category::{get_action_category, get_widget_category};
 use std::collections::HashMap;
+use enum_dispatch::enum_dispatch;
 
 pub mod translator;
 pub mod currency;
@@ -15,18 +15,16 @@ pub mod unit_converter;
 pub mod time_converter;
 pub mod definition;
 pub mod text_analyser;
+pub mod calculator;
 
 use async_trait::async_trait;
 
-/// Feature trait that all features must implement
-///
-/// This trait defines the interface for features to integrate with the
-/// command palette system. Features provide:
-/// - Widget commands (e.g., "Open Translator")
-/// - Action commands (e.g., "Translate to Spanish")
-/// - Action execution logic
-#[async_trait]
-pub trait Feature: Send + Sync {
+/// Sync methods trait for enum_dispatch
+/// 
+/// enum_dispatch works with sync methods only.
+/// Async methods are handled separately via async_trait.
+#[enum_dispatch]
+pub trait FeatureSync: Send + Sync {
     /// Unique identifier for this feature
     fn id(&self) -> &str;
     
@@ -42,6 +40,16 @@ pub trait Feature: Send + Sync {
     /// Example: "Translate to Spanish" translates selected text.
     fn action_commands(&self) -> Vec<CommandItem>;
     
+    /// Get context boost scores for this feature
+    ///
+    /// Returns a map of command IDs to boost scores based on the captured text.
+    /// Higher scores make commands appear higher in the palette.
+    fn get_context_boost(&self, captured_text: &str) -> HashMap<String, f64>;
+}
+
+/// Async methods trait (separate from enum_dispatch)
+#[async_trait]
+pub trait FeatureAsync: Send + Sync {
     /// Execute an action for this feature
     ///
     /// Returns Ok if the action was handled by this feature,
@@ -51,24 +59,41 @@ pub trait Feature: Send + Sync {
         action: &ActionType,
         params: &serde_json::Value,
     ) -> crate::shared::error::AppResult<ExecuteActionResponse>;
-    
-    /// Get context boost scores for this feature
-    ///
-    /// Returns a map of command IDs to boost scores based on the captured text.
-    /// Higher scores make commands appear higher in the palette.
-    fn get_context_boost(&self, captured_text: &str) -> HashMap<String, f64>;
 }
 
-/// Get all registered features
-pub fn get_all_features() -> Vec<Box<dyn Feature>> {
+/// Combined Feature trait (for convenience in implementations)
+#[async_trait]
+pub trait Feature: FeatureSync + FeatureAsync {}
+
+/// AppFeature enum with enum_dispatch for static dispatch
+///
+/// This replaces Vec<Box<dyn Feature>> with Vec<AppFeature> for zero-cost abstraction.
+/// All feature types are known at compile time, enabling better optimization.
+/// 
+/// enum_dispatch handles sync methods (FeatureSync), async methods handled separately.
+#[enum_dispatch(FeatureSync)]
+pub enum AppFeature {
+    Translator(translator::TranslatorFeature),
+    Currency(currency::CurrencyFeature),
+    Clipboard(clipboard::ClipboardFeature),
+    UnitConverter(unit_converter::UnitConverterFeature),
+    TimeConverter(time_converter::TimeConverterFeature),
+    Definition(definition::DefinitionFeature),
+    TextAnalyser(text_analyser::TextAnalyserFeature),
+    Calculator(calculator::CalculatorFeature),
+}
+
+/// Get all registered features (static dispatch, no trait objects)
+pub fn get_all_features() -> Vec<AppFeature> {
     vec![
-        Box::new(translator::TranslatorFeature),
-        Box::new(currency::CurrencyFeature),
-        Box::new(clipboard::ClipboardFeature),
-        Box::new(unit_converter::UnitConverterFeature),
-        Box::new(time_converter::TimeConverterFeature),
-        Box::new(definition::DefinitionFeature),
-        Box::new(text_analyser::TextAnalyserFeature),
+        AppFeature::Translator(translator::TranslatorFeature),
+        AppFeature::Currency(currency::CurrencyFeature),
+        AppFeature::Clipboard(clipboard::ClipboardFeature),
+        AppFeature::UnitConverter(unit_converter::UnitConverterFeature),
+        AppFeature::TimeConverter(time_converter::TimeConverterFeature),
+        AppFeature::Definition(definition::DefinitionFeature),
+        AppFeature::TextAnalyser(text_analyser::TextAnalyserFeature),
+        AppFeature::Calculator(calculator::CalculatorFeature),
     ]
 }
 
@@ -76,9 +101,12 @@ pub fn get_all_features() -> Vec<Box<dyn Feature>> {
 pub fn get_all_command_items() -> Vec<CommandItem> {
     let mut items = vec![];
     
+    println!("[get_all_command_items] Getting commands from {} features", get_all_features().len());
+    
     for feature in get_all_features() {
-        // Get widget commands and assign categories
+        // Use enum_dispatch generated methods directly
         let mut widget_cmds = feature.widget_commands();
+        println!("[get_all_command_items] Feature {}: {} widget commands", feature.id(), widget_cmds.len());
         for cmd in &mut widget_cmds {
             if let Some(widget_type) = &cmd.widget_type {
                 cmd.category = get_widget_category(widget_type);
@@ -86,8 +114,9 @@ pub fn get_all_command_items() -> Vec<CommandItem> {
         }
         items.extend(widget_cmds);
         
-        // Get action commands and assign categories
+        // Use enum_dispatch generated methods directly
         let mut action_cmds = feature.action_commands();
+        println!("[get_all_command_items] Feature {}: {} action commands", feature.id(), action_cmds.len());
         for cmd in &mut action_cmds {
             if let Some(action_type) = &cmd.action_type {
                 cmd.category = get_action_category(action_type);
@@ -96,6 +125,7 @@ pub fn get_all_command_items() -> Vec<CommandItem> {
         items.extend(action_cmds);
     }
     
+    println!("[get_all_command_items] Total commands: {}", items.len());
     items
 }
 
@@ -104,6 +134,7 @@ pub fn get_context_boost(captured_text: &str) -> HashMap<String, f64> {
     let mut boost_map = HashMap::new();
     
     for feature in get_all_features() {
+        // Use enum_dispatch generated method directly
         boost_map.extend(feature.get_context_boost(captured_text));
     }
     
@@ -115,7 +146,18 @@ pub async fn execute_feature_action(
     request: &ExecuteActionRequest,
 ) -> crate::shared::error::AppResult<ExecuteActionResponse> {
     for feature in get_all_features() {
-        match feature.execute_action(&request.action_type, &request.params).await {
+        // Use manual dispatch for async methods (enum_dispatch doesn't support async)
+        let result = match &feature {
+            AppFeature::Translator(f) => f.execute_action(&request.action_type, &request.params).await,
+            AppFeature::Currency(f) => f.execute_action(&request.action_type, &request.params).await,
+            AppFeature::Clipboard(f) => f.execute_action(&request.action_type, &request.params).await,
+            AppFeature::UnitConverter(f) => f.execute_action(&request.action_type, &request.params).await,
+            AppFeature::TimeConverter(f) => f.execute_action(&request.action_type, &request.params).await,
+            AppFeature::Definition(f) => f.execute_action(&request.action_type, &request.params).await,
+            AppFeature::TextAnalyser(f) => f.execute_action(&request.action_type, &request.params).await,
+            AppFeature::Calculator(f) => f.execute_action(&request.action_type, &request.params).await,
+        };
+        match result {
             Ok(response) => return Ok(response),
              // We'll assume implementations return AppError::Unknown("Unsupported action type") or similar 
              // for now, OR we just check if it returns ANY error?
