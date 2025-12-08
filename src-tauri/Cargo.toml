@@ -46,6 +46,9 @@ ts-rs = "10.0"
 enum_dispatch = "0.3"
 redb = "2"
 meval = "0.2"
+keyring = "2"
+isolang = "2"
+md5 = "0.7"
 
 # macOS native window management
 [target.'cfg(target_os = "macos")'.dependencies]

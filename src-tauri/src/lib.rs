@@ -4,6 +4,7 @@ mod api;
 mod core;
 mod system;
 mod config;
+mod features;
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -369,7 +370,7 @@ pub fn run() {
             api::commands::settings::get_settings,
             api::commands::settings::save_settings,
             // Feature commands
-            core::features::translator::translate_text,
+            features::translator::translate_text,
             core::features::currency::convert_currency,
             core::features::clipboard::get_clipboard_history,
             core::features::clipboard::paste_clipboard_item,

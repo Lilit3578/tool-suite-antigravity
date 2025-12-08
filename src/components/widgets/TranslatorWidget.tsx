@@ -1,162 +1,138 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../logic/api/tauri";
 import { Card } from "../ui/card";
 import { Separator } from "../ui/separator";
 import { Textarea } from "../ui/textarea";
 import { Combobox } from "../ui/combobox";
 
+type LanguageOption = { code: string; label: string };
 
-const LANGUAGE_NAMES: Record<string, string> = {
-    en: "english",
-    zh: "chinese (mandarin)",
-    es: "spanish",
-    fr: "french",
-    de: "german",
-    ar: "arabic",
-    pt: "portuguese",
-    ru: "russian",
-    ja: "japanese",
-    hi: "hindi",
-    it: "italian",
-    nl: "dutch",
-    pl: "polish",
-    tr: "turkish",
-    hy: "armenian",
-    fa: "persian",
-    vi: "vietnamese",
-    id: "indonesian",
-    ko: "korean",
-    bn: "bengali",
-    ur: "urdu",
-    th: "thai",
-    sv: "swedish",
-    da: "danish",
-    fi: "finnish",
-    hu: "hungarian",
-};
+const LANGUAGES: LanguageOption[] = [
+    { code: "en", label: "english" },
+    { code: "zh", label: "chinese (mandarin)" },
+    { code: "es", label: "spanish" },
+    { code: "fr", label: "french" },
+    { code: "de", label: "german" },
+    { code: "ar", label: "arabic" },
+    { code: "pt", label: "portuguese" },
+    { code: "ru", label: "russian" },
+    { code: "ja", label: "japanese" },
+    { code: "hi", label: "hindi" },
+    { code: "it", label: "italian" },
+    { code: "nl", label: "dutch" },
+    { code: "pl", label: "polish" },
+    { code: "tr", label: "turkish" },
+    { code: "hy", label: "armenian" },
+    { code: "fa", label: "persian" },
+    { code: "vi", label: "vietnamese" },
+    { code: "id", label: "indonesian" },
+    { code: "ko", label: "korean" },
+    { code: "bn", label: "bengali" },
+    { code: "ur", label: "urdu" },
+    { code: "th", label: "thai" },
+    { code: "sv", label: "swedish" },
+    { code: "da", label: "danish" },
+    { code: "fi", label: "finnish" },
+    { code: "hu", label: "hungarian" },
+];
 
-const LANGUAGE_CODES: Record<string, string> = {
-    english: "en",
-    "chinese (mandarin)": "zh",
-    spanish: "es",
-    french: "fr",
-    german: "de",
-    arabic: "ar",
-    portuguese: "pt",
-    russian: "ru",
-    japanese: "ja",
-    hindi: "hi",
-    italian: "it",
-    dutch: "nl",
-    polish: "pl",
-    turkish: "tr",
-    armenian: "hy",
-    persian: "fa",
-    vietnamese: "vi",
-    indonesian: "id",
-    korean: "ko",
-    bengali: "bn",
-    urdu: "ur",
-    thai: "th",
-    swedish: "sv",
-    danish: "da",
-    finnish: "fi",
-    hungarian: "hu",
-};
+function useDebouncedValue<T>(value: T, delay: number): T {
+    const [debounced, setDebounced] = useState(value);
+    useEffect(() => {
+        const id = setTimeout(() => setDebounced(value), delay);
+        return () => clearTimeout(id);
+    }, [value, delay]);
+    return debounced;
+}
 
 export function TranslatorWidget() {
     const [input, setInput] = useState("");
-    const [sourceLang, setSourceLang] = useState("italian");
-    const [targetLang, setTargetLang] = useState("english");
+    const [sourceLang, setSourceLang] = useState<LanguageOption | null>(null);
+    const [targetLang, setTargetLang] = useState<LanguageOption>(LANGUAGES.find((l) => l.code === "en")!);
     const [translated, setTranslated] = useState("");
     const [loading, setLoading] = useState(false);
-    const containerRef = useRef<HTMLDivElement>(null);
+    const [error, setError] = useState<string | null>(null);
+    const requestIdRef = useRef(0);
+
+    const debouncedInput = useDebouncedValue(input, 350);
 
     // Load text on mount - clipboard should already have the selected text from shortcut handler
     useEffect(() => {
         const loadText = async () => {
             try {
-                // First try clipboard (should have the selection captured by shortcut handler)
                 const clipboardResult = await api.captureSelection("clipboard");
-                if (clipboardResult.text && clipboardResult.text.trim()) {
+                if (clipboardResult.text?.trim()) {
                     setInput(clipboardResult.text);
                     return;
                 }
-
-                // Fallback: try to capture selection if clipboard is empty
                 const result = await api.captureSelection("selection");
-                if (result.text && result.text.trim()) {
+                if (result.text?.trim()) {
                     setInput(result.text);
                 }
             } catch (e) {
                 console.error("Failed to load text:", e);
-                // Final fallback: try clipboard again
-                try {
-                    const clipboardResult = await api.captureSelection("clipboard");
-                    if (clipboardResult.text && clipboardResult.text.trim()) {
-                        setInput(clipboardResult.text);
-                    }
-                } catch (clipboardError) {
-                    console.error("Failed to load clipboard:", clipboardError);
-                }
             }
         };
         loadText();
     }, []);
 
-    // Auto-translate with debounce
+    const targetCode = useMemo(() => targetLang.code, [targetLang]);
+    const sourceCode = useMemo(() => sourceLang?.code ?? null, [sourceLang]);
+
     useEffect(() => {
-        const timeout = setTimeout(() => {
-            if (!input.trim()) {
-                setTranslated("");
-                return;
-            }
-            translateText(input, LANGUAGE_CODES[targetLang] || "en");
-        }, 500);
-
-        return () => clearTimeout(timeout);
-    }, [input, targetLang]);
-
-    async function translateText(text: string, targetCode: string) {
-        setLoading(true);
-        try {
-            const response = await api.translateText({
-                text,
-                target_lang: targetCode,
-                source_lang: "auto",
-            });
-
-            setTranslated(response.translated);
-
-            // Update detected source language
-            if (response.detected_source_lang) {
-                const detected = LANGUAGE_NAMES[response.detected_source_lang];
-                if (detected) {
-                    setSourceLang(detected);
-                }
-            }
-        } catch (err) {
-            setTranslated(`Error: ${err}`);
-        } finally {
-            setLoading(false);
+        if (!debouncedInput.trim()) {
+            setTranslated("");
+            setError(null);
+            return;
         }
-    }
+
+        const currentRequest = requestIdRef.current + 1;
+        requestIdRef.current = currentRequest;
+        setLoading(true);
+        setError(null);
+
+        api.translateText({
+            text: debouncedInput,
+            target: targetCode,
+            source: sourceCode,
+        })
+            .then((response) => {
+                if (currentRequest !== requestIdRef.current) return;
+                if (response.detected) {
+                    const detectedOption = LANGUAGES.find(
+                        (lang) => lang.code.toLowerCase() === response.detected?.toLowerCase()
+                    );
+                    if (detectedOption) {
+                        setSourceLang(detectedOption);
+                    }
+                }
+                setTranslated(response.translated || "");
+            })
+            .catch((err) => {
+                if (currentRequest !== requestIdRef.current) return;
+                setError(String(err));
+                setTranslated("");
+            })
+            .finally(() => {
+                if (currentRequest === requestIdRef.current) {
+                    setLoading(false);
+                }
+            });
+    }, [debouncedInput, targetCode, sourceCode]);
 
     return (
-        <Card ref={containerRef} className="w-full border border-ink-400 p-4 space-y-6 rounded-2xl">
-            {/* Header */}
+        <Card className="w-full border border-ink-400 p-4 space-y-6 rounded-2xl">
             <h2 className="h2 italic">translator</h2>
             <Separator />
 
-            {/* SOURCE BLOCK */}
             <div className="rounded-xl border border-ink-400 p-4 space-y-3">
                 <Combobox
-                    value={sourceLang}
-                    onChange={setSourceLang}
-                    items={Object.values(LANGUAGE_NAMES)}
+                    value={sourceLang?.label ?? "auto"}
+                    onChange={(label) => setSourceLang(LANGUAGES.find((l) => l.label === label) ?? null)}
+                    items={["auto", ...LANGUAGES.map((l) => l.label)]}
                     placeholder="Detecting..."
                     searchPlaceholder="Search languages..."
-                    className="w-[160px]"
+                    className="w-[180px]"
                 />
 
                 <Separator />
@@ -169,15 +145,17 @@ export function TranslatorWidget() {
                 />
             </div>
 
-            {/* TARGET BLOCK */}
             <div className="rounded-xl border border-ink-400 bg-ink-200 p-4 space-y-3">
                 <Combobox
-                    value={targetLang}
-                    onChange={setTargetLang}
-                    items={Object.values(LANGUAGE_NAMES)}
+                    value={targetLang.label}
+                    onChange={(label) => {
+                        const next = LANGUAGES.find((l) => l.label === label);
+                        if (next) setTargetLang(next);
+                    }}
+                    items={LANGUAGES.map((l) => l.label)}
                     placeholder="Select language"
                     searchPlaceholder="Search languages..."
-                    className="w-[160px]"
+                    className="w-[180px]"
                 />
 
                 <Separator />
@@ -185,6 +163,8 @@ export function TranslatorWidget() {
                 <div className="text-sm text-ink-1000 min-h-[60px] leading-relaxed">
                     {loading ? (
                         <span className="text-ink-700">Translating...</span>
+                    ) : error ? (
+                        <span className="text-ink-700">{error}</span>
                     ) : translated ? (
                         translated
                     ) : (
@@ -195,10 +175,7 @@ export function TranslatorWidget() {
 
             <Separator />
 
-            {/* Footer */}
-            <div className="text-right text-ink-700 italic font-serif text-xl">
-                by nullab
-            </div>
+            <div className="text-right text-ink-700 italic font-serif text-xl">by nullab</div>
         </Card>
     );
 }

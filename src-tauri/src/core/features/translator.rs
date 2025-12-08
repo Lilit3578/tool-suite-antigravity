@@ -161,7 +161,6 @@ impl FeatureAsync for TranslatorFeature {
 ///
 /// Uses the unofficial Google Translate API endpoint (free tier).
 /// For production, consider using the official Google Cloud Translation API.
-#[tauri::command]
 pub async fn translate_text(request: TranslateRequest) -> crate::shared::error::AppResult<TranslateResponse> {
     let _settings = AppSettings::load().await.unwrap_or_default();
     

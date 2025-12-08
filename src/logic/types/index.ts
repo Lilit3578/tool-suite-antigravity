@@ -36,14 +36,14 @@ export interface CaptureResult {
 
 export interface TranslateRequest {
     text: string;
-    source_lang?: string;
-    target_lang: string;
-    provider?: string;
+    source?: string | null;
+    target: string;
 }
 
 export interface TranslateResponse {
     translated: string;
-    detected_source_lang?: string;
+    detected?: string;
+    cached?: boolean;
 }
 
 export interface ConvertCurrencyRequest {
