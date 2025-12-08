@@ -371,7 +371,7 @@ pub fn run() {
             api::commands::settings::save_settings,
             // Feature commands
             features::translator::translate_text,
-            core::features::currency::convert_currency,
+            features::currency::convert_currency,
             core::features::clipboard::get_clipboard_history,
             core::features::clipboard::paste_clipboard_item,
             core::features::clipboard::clear_clipboard_history,

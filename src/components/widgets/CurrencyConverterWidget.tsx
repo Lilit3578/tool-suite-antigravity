@@ -160,8 +160,11 @@ export function CurrencyConverterWidget() {
                 to,
             });
 
-            setResult(response.result);
-            setRate(response.rate);
+            const parsedResult = parseFloat(response.result);
+            const parsedRate = parseFloat(response.rate);
+
+            setResult(Number.isNaN(parsedResult) ? null : parsedResult);
+            setRate(Number.isNaN(parsedRate) ? null : parsedRate);
         } catch (err) {
             console.error("Conversion failed:", err);
             setResult(null);

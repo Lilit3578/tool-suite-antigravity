@@ -33,6 +33,10 @@ pub enum CommandError {
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 
+    /// Unsupported or unknown currency code
+    #[error("Unsupported currency: {0}")]
+    CurrencyNotSupported(String),
+
     /// Window operation error
     #[error("Window error: {0}")]
     WindowError(String),

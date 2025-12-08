@@ -54,8 +54,8 @@ export interface ConvertCurrencyRequest {
 }
 
 export interface ConvertCurrencyResponse {
-    result: number;
-    rate: number;
+    result: string;
+    rate: string;
     timestamp: string;
 }
 

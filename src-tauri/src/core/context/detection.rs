@@ -26,49 +26,57 @@ pub fn detect_currency(text: &str) -> Option<CurrencyInfo> {
         text
     };
     
-    // Common currency patterns
-    let patterns = vec![
-        // $100, $1,234.56
-        (r"\$\s*([0-9,]+\.?[0-9]*)", "USD"),
-        // €100, €1.234,56
-        (r"€\s*([0-9.,]+)", "EUR"),
-        // £100, £1,234.56
-        (r"£\s*([0-9,]+\.?[0-9]*)", "GBP"),
-        // ¥100, ¥1,234
-        (r"¥\s*([0-9,]+\.?[0-9]*)", "JPY"),
-        // 100 USD, 1234.56 USD
-        (r"([0-9,]+\.?[0-9]*)\s*USD", "USD"),
-        // 100 EUR, 1234.56 EUR
-        (r"([0-9,]+\.?[0-9]*)\s*EUR", "EUR"),
-        // 100 GBP, 1234.56 GBP
-        (r"([0-9,]+\.?[0-9]*)\s*GBP", "GBP"),
-        // 100 JPY, 1234 JPY
-        (r"([0-9,]+\.?[0-9]*)\s*JPY", "JPY"),
-        // 100 CAD, 1234.56 CAD
-        (r"([0-9,]+\.?[0-9]*)\s*CAD", "CAD"),
-        // 100 AUD, 1234.56 AUD
-        (r"([0-9,]+\.?[0-9]*)\s*AUD", "AUD"),
-        // 100 CHF, 1234.56 CHF
-        (r"([0-9,]+\.?[0-9]*)\s*CHF", "CHF"),
-        // 100 CNY, 1234.56 CNY
-        (r"([0-9,]+\.?[0-9]*)\s*CNY", "CNY"),
-        // 100 INR, 1234.56 INR
-        (r"([0-9,]+\.?[0-9]*)\s*INR", "INR"),
-    ];
+    // Fuzzy pattern: optional prefix, number, optional whitespace, optional suffix
+    let re = Regex::new(r"(?i)^\s*([^\d\s\.,]*)[\s]*([\d\.,]+)[\s]*([^\d\s\.,]*)\s*$")
+        .expect("valid currency regex");
 
-    for (pattern, currency_code) in patterns {
-        if let Ok(re) = Regex::new(pattern) {
-            if let Some(captures) = re.captures(truncated_text) {
-                if let Some(amount_str) = captures.get(1) {
-                    // Remove commas and parse
-                    let cleaned = amount_str.as_str().replace(",", "");
-                    if let Ok(amount) = cleaned.parse::<f64>() {
-                        return Some(CurrencyInfo {
-                            amount,
-                            currency_code: currency_code.to_string(),
-                        });
-                    }
+    if let Some(caps) = re.captures(truncated_text.trim()) {
+        let prefix = caps.get(1).map(|m| m.as_str()).unwrap_or("").trim();
+        let number_raw = caps.get(2).map(|m| m.as_str()).unwrap_or("");
+        let suffix = caps.get(3).map(|m| m.as_str()).unwrap_or("").trim();
+
+        let cleaned = number_raw.replace(',', "");
+        if let Ok(amount) = cleaned.parse::<f64>() {
+            // Detect currency from prefix/suffix tokens
+            let map_token = |raw: &str| -> Option<&'static str> {
+                let t = raw.trim().to_ascii_lowercase();
+                if t.is_empty() {
+                    return None;
                 }
+                match t.as_str() {
+                    "$" | "usd" | "dollar" | "dollars" => Some("USD"),
+                    "€" | "eur" | "euro" | "euros" => Some("EUR"),
+                    "£" | "gbp" | "pound" | "pounds" => Some("GBP"),
+                    "¥" | "jpy" | "yen" => Some("JPY"),
+                    "cad" => Some("CAD"),
+                    "aud" => Some("AUD"),
+                    "chf" => Some("CHF"),
+                    "cny" => Some("CNY"),
+                    "inr" => Some("INR"),
+                    "mxn" => Some("MXN"),
+                    _ => None,
+                }
+            };
+
+            let currency_code = map_token(prefix)
+                .map(|c| c.to_string())
+                .or_else(|| map_token(suffix).map(|c| c.to_string()))
+                .or_else(|| {
+                    let sp = prefix.to_ascii_uppercase();
+                    if sp.len() == 3 && sp.chars().all(|c| c.is_ascii_alphabetic()) {
+                        Some(sp)
+                    } else {
+                        let ss = suffix.to_ascii_uppercase();
+                        if ss.len() == 3 && ss.chars().all(|c| c.is_ascii_alphabetic()) {
+                            Some(ss)
+                        } else {
+                            None
+                        }
+                    }
+                });
+
+            if let Some(code) = currency_code {
+                return Some(CurrencyInfo { amount, currency_code: code });
             }
         }
     }

@@ -27,7 +27,8 @@ pub struct TranslateResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings.ts")]
 pub struct ConvertCurrencyRequest {
-    pub amount: f64,
+    #[ts(type = "string")]
+    pub amount: String,
     pub from: String,
     pub to: String,
     pub date: Option<String>,
@@ -36,8 +37,8 @@ pub struct ConvertCurrencyRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings.ts")]
 pub struct ConvertCurrencyResponse {
-    pub result: f64,
-    pub rate: f64,
+    pub result: String,
+    pub rate: String,
     pub timestamp: String,
 }
 

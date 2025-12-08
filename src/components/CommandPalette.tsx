@@ -463,8 +463,25 @@ export function CommandPalette() {
                 setSelectedActionId(null);
             }, 3000);
         } catch (e) {
+            const errObj = e as any;
+            const message =
+                errObj?.message ??
+                errObj?.error ??
+                (typeof errObj === "string" ? errObj : JSON.stringify(errObj));
+
             console.error("Action execution failed:", e);
-            setPopoverContent(`Error: ${e}`);
+
+            // Best-effort toast if a global toast implementation exists
+            try {
+                const maybeToast = (window as any)?.toast;
+                if (maybeToast?.error) {
+                    maybeToast.error(message);
+                }
+            } catch (_) {
+                /* ignore toast failures */
+            }
+
+            setPopoverContent(`Error: ${message}`);
             setIsError(true);
             setIsExecuting(false);
             setExecutingActionId(null);

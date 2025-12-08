@@ -2,12 +2,15 @@
 //!
 //! Provides currency conversion with 10 major currencies.
 
-use crate::shared::types::*;
-use crate::shared::settings::AppSettings;
 use crate::core::context;
-use super::{FeatureSync, FeatureAsync};
-use std::collections::HashMap;
+use crate::features::currency::{service::CurrencyService, types as currency_types};
+use crate::shared::error::AppError;
+use crate::shared::types::*;
+use super::{FeatureAsync, FeatureSync};
 use async_trait::async_trait;
+use rust_decimal::Decimal;
+use std::collections::HashMap;
+use std::str::FromStr;
 
 #[derive(Clone)]
 pub struct CurrencyFeature;
@@ -86,6 +89,10 @@ impl FeatureAsync for CurrencyFeature {
         action: &ActionType,
         params: &serde_json::Value,
     ) -> crate::shared::error::AppResult<ExecuteActionResponse> {
+        println!("!! CURRENCY EXECUTE CALLED with {:?}", action);
+        println!("!! CURRENCY PARAMS: {}", params);
+
+        // Map known quick actions to explicit targets
         let target_currency = match action {
             ActionType::ConvertUsd => "USD",
             ActionType::ConvertEur => "EUR",
@@ -97,36 +104,66 @@ impl FeatureAsync for CurrencyFeature {
             ActionType::ConvertCny => "CNY",
             ActionType::ConvertInr => "INR",
             ActionType::ConvertMxn => "MXN",
-            _ => return Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
+            _ => {
+                println!("[CurrencyFeature] Currency ignoring action: {:?}", action);
+                return Err(crate::shared::error::AppError::Unknown(
+                    crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string(),
+                ));
+            }
         };
+
+        println!("[CurrencyFeature] DEBUG: Target currency resolved to {}", target_currency);
         
         let text = params.get("text")
             .and_then(|v| v.as_str())
             .unwrap_or("100");
+        println!("[CurrencyFeature] DEBUG: Input text = '{}'", text);
         
-        // Parse amount from text
-        let amount = text.chars()
-            .filter(|c| c.is_numeric() || *c == '.')
-            .collect::<String>()
-            .parse::<f64>()
-            .unwrap_or(100.0);
-        
-        let from = params.get("from")
-            .and_then(|v| v.as_str())
-            .unwrap_or("USD");
-        
-        let convert_request = ConvertCurrencyRequest {
-            amount,
-            from: from.to_string(),
-            to: target_currency.to_string(),
-            date: None,
+        // Attempt fuzzy parse like "1euro" or "$10"
+        let (amount, from) = if let Some((amt, code)) = CurrencyService::parse_natural_input(text) {
+            println!("[CurrencyFeature] DEBUG: parse_natural_input succeeded -> amount={}, from={}", amt, code);
+            (amt, code)
+        } else {
+            let amount_str = text
+                .chars()
+                .filter(|c| c.is_numeric() || *c == '.')
+                .collect::<String>();
+            println!("[CurrencyFeature] DEBUG: Fallback numeric parse string='{}'", amount_str);
+            let amt = Decimal::from_str(&amount_str)
+                .or_else(|_| Decimal::from_str("100"))
+                .unwrap_or_else(|_| Decimal::from(100u32));
+            let from = params
+                .get("from")
+                .and_then(|v| v.as_str())
+                .unwrap_or("USD")
+                .to_string();
+            println!("[CurrencyFeature] DEBUG: Parsed fallback amount={}, from={}", amt, from);
+            (amt, from)
         };
+
+        let convert_request = currency_types::ConvertCurrencyRequest {
+            amount,
+            from,
+            to: target_currency.to_string(),
+        };
+        println!("[CurrencyFeature] DEBUG: convert_request = amount={}, from={}, to={}", convert_request.amount, convert_request.from, convert_request.to);
         
         // Execute conversion asynchronously
-        let response = convert_currency(convert_request).await?;
+        let service = CurrencyService::global()
+            .map_err(|e| AppError::Unknown(e.to_string()))?;
+        println!("[CurrencyFeature] DEBUG: CurrencyService acquired");
+
+        let response = service
+            .convert(convert_request)
+            .await
+            .map_err(|e| {
+                println!("[CurrencyFeature] ERROR: convert failed: {}", e);
+                AppError::from(e)
+            })?;
+        println!("[CurrencyFeature] DEBUG: convert response: result={}, rate={}, ts={}", response.result, response.rate, response.timestamp);
         
         Ok(ExecuteActionResponse {
-            result: format!("{:.2} {}", response.result, target_currency),
+            result: format!("{} {}", response.result, target_currency),
             metadata: Some(serde_json::json!({
                 "rate": response.rate,
                 "timestamp": response.timestamp,
@@ -135,84 +172,34 @@ impl FeatureAsync for CurrencyFeature {
     }
 }
 
-/// Convert currency between different currencies
-#[tauri::command]
-pub async fn convert_currency(request: ConvertCurrencyRequest) -> crate::shared::error::AppResult<ConvertCurrencyResponse> {
-    let settings = AppSettings::load().await.unwrap_or_default();
-    
-    let api_key = if !settings.api_keys.currency_api_key.is_empty() {
-        settings.api_keys.currency_api_key.clone()
-    } else {
-        String::new()
-    };
+// Legacy function retained for backward compatibility; delegates to the new service.
+pub async fn convert_currency(
+    request: ConvertCurrencyRequest,
+) -> crate::shared::error::AppResult<currency_types::ConvertCurrencyResponse> {
+    let service = CurrencyService::global()
+        .map_err(|e| AppError::Unknown(e.to_string()))?;
 
-    let client = reqwest::Client::new();
-    
-    let api_url = if api_key.is_empty() {
-        format!("https://api.exchangerate-api.com/v4/latest/{}", request.from)
-    } else {
-        format!("https://v6.exchangerate-api.com/v6/{}/latest/{}", api_key, request.from)
-    };
+    // Try strict parse first; fallback to fuzzy parsing on failure
+    let mut amount = Decimal::from_str(&request.amount)
+        .or_else(|_| Decimal::from_str("0"))
+        .unwrap_or_else(|_| Decimal::ZERO);
+    let mut from = request.from.clone();
 
-    match client.get(&api_url).send().await {
-        Ok(response) => {
-            if response.status().is_success() {
-                match response.json::<serde_json::Value>().await {
-                    Ok(json) => {
-                        let rates = &json["rates"];
-                        let rate = rates[&request.to].as_f64().unwrap_or(1.0);
-                        let result = request.amount * rate;
-                        let timestamp = json["time_last_updated"]
-                            .as_str()
-                            .or(json["date"].as_str())
-                            .unwrap_or("")
-                            .to_string();
-
-                        Ok(ConvertCurrencyResponse {
-                            result,
-                            rate,
-                            timestamp: if timestamp.is_empty() {
-                                chrono::Utc::now().to_rfc3339()
-                            } else {
-                                timestamp
-                            },
-                        })
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to parse currency response: {}", e);
-                        // Fallback logic kept, but maybe log warning?
-                        // For AppResult, we should ideally fail if it breaks, but to maintain behavior:
-                        let rate = 1.07;
-                        Ok(ConvertCurrencyResponse {
-                            result: request.amount * rate,
-                            rate,
-                            timestamp: chrono::Utc::now().to_rfc3339(),
-                        })
-                    }
-                }
-            } else {
-                eprintln!("Currency API returned error: {}", response.status());
-                let rate = 1.07;
-                Ok(ConvertCurrencyResponse {
-                    result: request.amount * rate,
-                    rate,
-                    timestamp: chrono::Utc::now().to_rfc3339(),
-                })
-            }
-        }
-        Err(e) => {
-             // Network error
-             // We can return AppError::Network(e.to_string())
-             // OR keep current fallback behavior.
-             // Given constraint "Refactor to eliminate happy path patterns", we should probably error out if it fails?
-             // But existing code has fallbacks. I will keep fallbacks but wrap return type.
-            eprintln!("Currency API request failed: {}", e);
-            let rate = 1.07;
-            Ok(ConvertCurrencyResponse {
-                result: request.amount * rate,
-                rate,
-                timestamp: chrono::Utc::now().to_rfc3339(),
-            })
+    if amount.is_zero() {
+        if let Some((amt, code)) = CurrencyService::parse_fuzzy_amount(&request.amount) {
+            amount = amt;
+            from = code;
         }
     }
+
+    let response = service
+        .convert(currency_types::ConvertCurrencyRequest {
+            amount,
+            from,
+            to: request.to.clone(),
+        })
+        .await
+        .map_err(AppError::from)?;
+
+    Ok(response)
 }
