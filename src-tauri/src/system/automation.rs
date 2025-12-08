@@ -12,7 +12,6 @@ pub use macos::{
     get_active_app,
     restore_focus,
     simulate_cmd_c,
-    detect_text_selection, // ← NEW: Smart selection detection
 };
 
 // Stub implementations for non-macOS platforms

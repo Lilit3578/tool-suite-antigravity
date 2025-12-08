@@ -2,9 +2,11 @@ use tauri::{AppHandle, Manager};
 use crate::shared::types::{ActionType, CommandItem, TextAnalysisRequest, TextAnalysisResponse};
 use std::collections::HashMap;
 use unicode_segmentation::UnicodeSegmentation;
+use async_trait::async_trait;
 
 pub struct TextAnalyserFeature;
 
+#[async_trait]
 impl super::Feature for TextAnalyserFeature {
     fn id(&self) -> &str {
         "text_analyser"
@@ -52,10 +54,10 @@ impl super::Feature for TextAnalyserFeature {
         ]
     }
 
-    fn execute_action(&self, action: &ActionType, params: &serde_json::Value) -> Result<crate::shared::types::ExecuteActionResponse, String> {
+    async fn execute_action(&self, action: &ActionType, params: &serde_json::Value) -> crate::shared::error::AppResult<crate::shared::types::ExecuteActionResponse> {
         let text = params.get("text")
             .and_then(|t| t.as_str())
-            .ok_or("Missing 'text' parameter")?
+            .ok_or_else(|| crate::shared::error::AppError::Validation("Missing 'text' parameter".to_string()))?
             .to_string();
 
         let analysis = perform_analysis(&text);
@@ -72,12 +74,12 @@ impl super::Feature for TextAnalyserFeature {
                     format!("~{} sec", secs)
                 }
             },
-            _ => return Err("Unsupported action".to_string()),
+            _ => return Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
         };
 
         Ok(crate::shared::types::ExecuteActionResponse {
             result: result_text,
-            metadata: Some(serde_json::to_value(analysis).map_err(|e| e.to_string())?),
+            metadata: Some(serde_json::to_value(analysis)?),
         })
     }
 
@@ -119,6 +121,6 @@ fn perform_analysis(text: &str) -> TextAnalysisResponse {
 }
 
 #[tauri::command]
-pub async fn analyze_text(request: TextAnalysisRequest) -> Result<TextAnalysisResponse, String> {
+pub async fn analyze_text(request: TextAnalysisRequest) -> crate::shared::error::AppResult<TextAnalysisResponse> {
     Ok(perform_analysis(&request.text))
 }

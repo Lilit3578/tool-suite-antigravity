@@ -16,6 +16,8 @@ pub mod time_converter;
 pub mod definition;
 pub mod text_analyser;
 
+use async_trait::async_trait;
+
 /// Feature trait that all features must implement
 ///
 /// This trait defines the interface for features to integrate with the
@@ -23,6 +25,7 @@ pub mod text_analyser;
 /// - Widget commands (e.g., "Open Translator")
 /// - Action commands (e.g., "Translate to Spanish")
 /// - Action execution logic
+#[async_trait]
 pub trait Feature: Send + Sync {
     /// Unique identifier for this feature
     fn id(&self) -> &str;
@@ -42,20 +45,18 @@ pub trait Feature: Send + Sync {
     /// Execute an action for this feature
     ///
     /// Returns Ok if the action was handled by this feature,
-    /// Err if the action is not recognized.
-    fn execute_action(
+    /// Err if the action is not recognized or execution failed.
+    async fn execute_action(
         &self,
         action: &ActionType,
         params: &serde_json::Value,
-    ) -> Result<ExecuteActionResponse, String>;
+    ) -> crate::shared::error::AppResult<ExecuteActionResponse>;
     
     /// Get context boost scores for this feature
     ///
     /// Returns a map of command IDs to boost scores based on the captured text.
     /// Higher scores make commands appear higher in the palette.
-    fn get_context_boost(&self, _captured_text: &str) -> HashMap<String, f64> {
-        HashMap::new()
-    }
+    fn get_context_boost(&self, captured_text: &str) -> HashMap<String, f64>;
 }
 
 /// Get all registered features
@@ -64,7 +65,7 @@ pub fn get_all_features() -> Vec<Box<dyn Feature>> {
         Box::new(translator::TranslatorFeature),
         Box::new(currency::CurrencyFeature),
         Box::new(clipboard::ClipboardFeature),
-        Box::new(unit_converter::UnitConverter),
+        Box::new(unit_converter::UnitConverterFeature),
         Box::new(time_converter::TimeConverterFeature),
         Box::new(definition::DefinitionFeature),
         Box::new(text_analyser::TextAnalyserFeature),
@@ -110,14 +111,34 @@ pub fn get_context_boost(captured_text: &str) -> HashMap<String, f64> {
 }
 
 /// Execute an action across all features
-pub fn execute_feature_action(
+pub async fn execute_feature_action(
     request: &ExecuteActionRequest,
-) -> Result<ExecuteActionResponse, String> {
+) -> crate::shared::error::AppResult<ExecuteActionResponse> {
     for feature in get_all_features() {
-        if let Ok(response) = feature.execute_action(&request.action_type, &request.params) {
-            return Ok(response);
+        match feature.execute_action(&request.action_type, &request.params).await {
+            Ok(response) => return Ok(response),
+             // We'll assume implementations return AppError::Unknown("Unsupported action type") or similar 
+             // for now, OR we just check if it returns ANY error?
+             // No, if a feature TRIES to handle it and FAILS (e.g. network error), we should return that error.
+             // But if it just doesn't know the action, we continue.
+             
+             // To simplify: we'll check message for now, but ideally we add `AppError::UnsupportedAction` variant later.
+             // Or we rely on `utils.ts` equivalent in Rust? 
+             
+             // Actually, `core::shared::errors::ERR_UNSUPPORTED_ACTION` exists.
+            Err(e) => {
+                 let err_str = e.to_string();
+                 if err_str == crate::shared::errors::ERR_UNSUPPORTED_ACTION {
+                    continue;
+                 }
+                 // If it's a real error (not just unsupported), we could return it?
+                 // But multiple features might share action types? No, ActionType variants are unique usually.
+                 // So if a feature claims to handle it (by not returning Unsupported), but fails, we stop.
+                 return Err(e);
+            }
         }
     }
     
-    Err("Unknown action type".to_string())
+    // If we get here, no feature handled it
+    Err(crate::shared::error::AppError::Feature("Unknown action type".to_string()))
 }

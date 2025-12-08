@@ -4,7 +4,6 @@ import { api } from "./logic/api/tauri";
 import { CommandPalette } from "./components/CommandPalette";
 import { TranslatorWidget } from "./components/widgets/TranslatorWidget";
 import { CurrencyConverterWidget } from "./components/widgets/CurrencyConverterWidget";
-import { ClipboardHistoryWidget } from "./components/widgets/ClipboardHistoryWidget";
 import { SettingsWidget } from "./components/widgets/SettingsWidget";
 import { UnitConverterWidget } from "./components/widgets/UnitConverterWidget";
 import { TimeConverterWidget } from "./components/widgets/TimeConverterWidget";
@@ -71,8 +70,6 @@ function App() {
       return <DefinitionWidget />;
     case "text_analyser":
       return <TextAnalyserWidget />;
-    case "clipboard":
-      return <ClipboardHistoryWidget />;
     case "settings":
       return <SettingsWidget />;
     case "palette":

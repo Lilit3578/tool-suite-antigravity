@@ -9,7 +9,7 @@
 pub mod history;
 pub mod monitor;
 
-pub use history::{ClipboardHistory, ClipboardItem};
+pub use history::ClipboardHistory;
 pub use monitor::ClipboardMonitor;
 
 /// Write text to clipboard using Tauri's clipboard manager

@@ -7,14 +7,17 @@ const ERR_NEGATIVE_MASS: &str = "Mass cannot be negative. Please provide a posit
 const ERR_NEGATIVE_VOLUME: &str = "Volume cannot be negative. Please provide a positive value.";
 const ERR_UNSUPPORTED_ACTION: &str = "Unsupported action type";
 const ERR_CANNOT_PARSE_UNIT: &str = "Could not parse unit from text";
-use serde_json::json;
 use super::Feature;
-use regex::Regex;
+use async_trait::async_trait;
+use serde_json::json;
 use once_cell::sync::Lazy;
+use regex::Regex;
+// use crate::shared::types::ConvertUnitResponse; // Removed invalid import
 
-pub struct UnitConverter;
+pub struct UnitConverterFeature;
 
-impl Feature for UnitConverter {
+#[async_trait]
+impl Feature for UnitConverterFeature {
     fn id(&self) -> &'static str {
         "unit_converter"
     }
@@ -23,10 +26,10 @@ impl Feature for UnitConverter {
         vec![CommandItem {
             id: "widget_unit_converter".to_string(),
             label: "Unit Converter".to_string(),
-            description: Some("Open unit converter widget".to_string()),
+            description: Some("Convert between units".to_string()),
             action_type: None,
             widget_type: Some("unit_converter".to_string()),
-            category: None, // Will be assigned in get_all_command_items()
+            category: None,
         }]
     }
     
@@ -78,18 +81,22 @@ impl Feature for UnitConverter {
             .collect()
     }
 
-    fn execute_action(
+    fn get_context_boost(&self, _captured_text: &str) -> std::collections::HashMap<String, f64> {
+        std::collections::HashMap::new()
+    }
+
+    async fn execute_action(
         &self,
         action_type: &ActionType,
         params: &serde_json::Value,
-    ) -> Result<ExecuteActionResponse, String> {
+    ) -> crate::shared::error::AppResult<ExecuteActionResponse> {
         // Extract text from params
         let text = params.get("text")
             .and_then(|v| v.as_str())
-            .ok_or(ERR_MISSING_TEXT_PARAM)?;
+            .ok_or_else(|| crate::shared::error::AppError::Validation(ERR_MISSING_TEXT_PARAM.to_string()))?;
 
         // Parse amount and source unit from text
-        let (amount, source_unit) = parse_unit_from_text(text)?;
+        let (amount, source_unit) = parse_unit_from_text(text).map_err(|e| crate::shared::error::AppError::Validation(e))?;
         
         // Validate negative numbers for physical quantities
         match action_type {
@@ -98,14 +105,14 @@ impl Feature for UnitConverter {
             | ActionType::ConvertToYD | ActionType::ConvertToMI => {
                 // Length cannot be negative
                 if amount < 0.0 {
-                    return Err(ERR_NEGATIVE_LENGTH.to_string());
+                    return Err(crate::shared::error::AppError::Validation(ERR_NEGATIVE_LENGTH.to_string()));
                 }
             }
             ActionType::ConvertToMG | ActionType::ConvertToG | ActionType::ConvertToKG 
             | ActionType::ConvertToOZ | ActionType::ConvertToLB => {
                 // Mass cannot be negative
                 if amount < 0.0 {
-                    return Err(ERR_NEGATIVE_MASS.to_string());
+                    return Err(crate::shared::error::AppError::Validation(ERR_NEGATIVE_MASS.to_string()));
                 }
             }
             ActionType::ConvertToML | ActionType::ConvertToL | ActionType::ConvertToFlOz 
@@ -113,7 +120,7 @@ impl Feature for UnitConverter {
             | ActionType::ConvertToGal => {
                 // Volume cannot be negative
                 if amount < 0.0 {
-                    return Err(ERR_NEGATIVE_VOLUME.to_string());
+                    return Err(crate::shared::error::AppError::Validation(ERR_NEGATIVE_VOLUME.to_string()));
                 }
             }
             // Temperature and Speed can be negative (valid use cases)
@@ -123,126 +130,124 @@ impl Feature for UnitConverter {
         // Determine target unit and handle cross-category conversions
         let (target_unit, converted_value) = match action_type {
             // Length conversions
-            ActionType::ConvertToMM => ("mm", convert_unit(amount, &source_unit, "mm")?),
-            ActionType::ConvertToCM => ("cm", convert_unit(amount, &source_unit, "cm")?),
-            ActionType::ConvertToM => ("m", convert_unit(amount, &source_unit, "m")?),
-            ActionType::ConvertToKM => ("km", convert_unit(amount, &source_unit, "km")?),
-            ActionType::ConvertToIN => ("in", convert_unit(amount, &source_unit, "in")?),
-            ActionType::ConvertToFT => ("ft", convert_unit(amount, &source_unit, "ft")?),
-            ActionType::ConvertToYD => ("yd", convert_unit(amount, &source_unit, "yd")?),
-            ActionType::ConvertToMI => ("mi", convert_unit(amount, &source_unit, "mi")?),
+            ActionType::ConvertToMM => ("mm", convert_unit(amount, &source_unit, "mm").map_err(crate::shared::error::AppError::Calculation)?),
+            ActionType::ConvertToCM => ("cm", convert_unit(amount, &source_unit, "cm").map_err(crate::shared::error::AppError::Calculation)?),
+            ActionType::ConvertToM => ("m", convert_unit(amount, &source_unit, "m").map_err(crate::shared::error::AppError::Calculation)?),
+            ActionType::ConvertToKM => ("km", convert_unit(amount, &source_unit, "km").map_err(crate::shared::error::AppError::Calculation)?),
+            ActionType::ConvertToIN => ("in", convert_unit(amount, &source_unit, "in").map_err(crate::shared::error::AppError::Calculation)?),
+            ActionType::ConvertToFT => ("ft", convert_unit(amount, &source_unit, "ft").map_err(crate::shared::error::AppError::Calculation)?),
+            ActionType::ConvertToYD => ("yd", convert_unit(amount, &source_unit, "yd").map_err(crate::shared::error::AppError::Calculation)?),
+            ActionType::ConvertToMI => ("mi", convert_unit(amount, &source_unit, "mi").map_err(crate::shared::error::AppError::Calculation)?),
             
-            // Mass conversions (smart: handles Volume → Mass cross-category)
+            // Mass conversions
             ActionType::ConvertToMG => {
                 if is_volume_unit(&source_unit) {
-                    // Cross-category: Volume → Mass
-                    let (val, _) = convert_volume_to_mass(amount, &source_unit, "mg", params)?;
+                    let (val, _) = convert_volume_to_mass(amount, &source_unit, "mg", params).map_err(crate::shared::error::AppError::Calculation)?;
                     ("mg", val)
                 } else {
-                    ("mg", convert_unit(amount, &source_unit, "mg")?)
+                    ("mg", convert_unit(amount, &source_unit, "mg").map_err(crate::shared::error::AppError::Calculation)?)
                 }
             },
             ActionType::ConvertToG => {
                 if is_volume_unit(&source_unit) {
-                    let (val, _) = convert_volume_to_mass(amount, &source_unit, "g", params)?;
+                    let (val, _) = convert_volume_to_mass(amount, &source_unit, "g", params).map_err(crate::shared::error::AppError::Calculation)?;
                     ("g", val)
                 } else {
-                    ("g", convert_unit(amount, &source_unit, "g")?)
+                    ("g", convert_unit(amount, &source_unit, "g").map_err(crate::shared::error::AppError::Calculation)?)
                 }
             },
             ActionType::ConvertToKG => {
                 if is_volume_unit(&source_unit) {
-                    let (val, _) = convert_volume_to_mass(amount, &source_unit, "kg", params)?;
+                    let (val, _) = convert_volume_to_mass(amount, &source_unit, "kg", params).map_err(crate::shared::error::AppError::Calculation)?;
                     ("kg", val)
                 } else {
-                    ("kg", convert_unit(amount, &source_unit, "kg")?)
+                    ("kg", convert_unit(amount, &source_unit, "kg").map_err(crate::shared::error::AppError::Calculation)?)
                 }
             },
             ActionType::ConvertToOZ => {
                 if is_volume_unit(&source_unit) {
-                    let (val, _) = convert_volume_to_mass(amount, &source_unit, "oz", params)?;
+                    let (val, _) = convert_volume_to_mass(amount, &source_unit, "oz", params).map_err(crate::shared::error::AppError::Calculation)?;
                     ("oz", val)
                 } else {
-                    ("oz", convert_unit(amount, &source_unit, "oz")?)
+                    ("oz", convert_unit(amount, &source_unit, "oz").map_err(crate::shared::error::AppError::Calculation)?)
                 }
             },
             ActionType::ConvertToLB => {
                 if is_volume_unit(&source_unit) {
-                    let (val, _) = convert_volume_to_mass(amount, &source_unit, "lb", params)?;
+                    let (val, _) = convert_volume_to_mass(amount, &source_unit, "lb", params).map_err(crate::shared::error::AppError::Calculation)?;
                     ("lb", val)
                 } else {
-                    ("lb", convert_unit(amount, &source_unit, "lb")?)
+                    ("lb", convert_unit(amount, &source_unit, "lb").map_err(crate::shared::error::AppError::Calculation)?)
                 }
             },
             
-            // Volume conversions (smart: handles Mass → Volume cross-category)
+            // Volume conversions
             ActionType::ConvertToML => {
                 if is_mass_unit(&source_unit) {
-                    // Cross-category: Mass → Volume
-                    let (val, _) = convert_mass_to_volume(amount, &source_unit, "ml", params)?;
+                    let (val, _) = convert_mass_to_volume(amount, &source_unit, "ml", params).map_err(crate::shared::error::AppError::Calculation)?;
                     ("ml", val)
                 } else {
-                    ("ml", convert_unit(amount, &source_unit, "ml")?)
+                    ("ml", convert_unit(amount, &source_unit, "ml").map_err(crate::shared::error::AppError::Calculation)?)
                 }
             },
             ActionType::ConvertToL => {
                 if is_mass_unit(&source_unit) {
-                    let (val, _) = convert_mass_to_volume(amount, &source_unit, "L", params)?;
+                    let (val, _) = convert_mass_to_volume(amount, &source_unit, "L", params).map_err(crate::shared::error::AppError::Calculation)?;
                     ("L", val)
                 } else {
-                    ("L", convert_unit(amount, &source_unit, "L")?)
+                    ("L", convert_unit(amount, &source_unit, "L").map_err(crate::shared::error::AppError::Calculation)?)
                 }
             },
             ActionType::ConvertToFlOz => {
                 if is_mass_unit(&source_unit) {
-                    let (val, _) = convert_mass_to_volume(amount, &source_unit, "fl-oz", params)?;
+                    let (val, _) = convert_mass_to_volume(amount, &source_unit, "fl-oz", params).map_err(crate::shared::error::AppError::Calculation)?;
                     ("fl-oz", val)
                 } else {
-                    ("fl-oz", convert_unit(amount, &source_unit, "fl-oz")?)
+                    ("fl-oz", convert_unit(amount, &source_unit, "fl-oz").map_err(crate::shared::error::AppError::Calculation)?)
                 }
             },
             ActionType::ConvertToCup => {
                 if is_mass_unit(&source_unit) {
-                    let (val, _) = convert_mass_to_volume(amount, &source_unit, "cup", params)?;
+                    let (val, _) = convert_mass_to_volume(amount, &source_unit, "cup", params).map_err(crate::shared::error::AppError::Calculation)?;
                     ("cup", val)
                 } else {
-                    ("cup", convert_unit(amount, &source_unit, "cup")?)
+                    ("cup", convert_unit(amount, &source_unit, "cup").map_err(crate::shared::error::AppError::Calculation)?)
                 }
             },
             ActionType::ConvertToPint => {
                 if is_mass_unit(&source_unit) {
-                    let (val, _) = convert_mass_to_volume(amount, &source_unit, "pint", params)?;
+                    let (val, _) = convert_mass_to_volume(amount, &source_unit, "pint", params).map_err(crate::shared::error::AppError::Calculation)?;
                     ("pint", val)
                 } else {
-                    ("pint", convert_unit(amount, &source_unit, "pint")?)
+                    ("pint", convert_unit(amount, &source_unit, "pint").map_err(crate::shared::error::AppError::Calculation)?)
                 }
             },
             ActionType::ConvertToQuart => {
                 if is_mass_unit(&source_unit) {
-                    let (val, _) = convert_mass_to_volume(amount, &source_unit, "quart", params)?;
+                    let (val, _) = convert_mass_to_volume(amount, &source_unit, "quart", params).map_err(crate::shared::error::AppError::Calculation)?;
                     ("quart", val)
                 } else {
-                    ("quart", convert_unit(amount, &source_unit, "quart")?)
+                    ("quart", convert_unit(amount, &source_unit, "quart").map_err(crate::shared::error::AppError::Calculation)?)
                 }
             },
             ActionType::ConvertToGal => {
                 if is_mass_unit(&source_unit) {
-                    let (val, _) = convert_mass_to_volume(amount, &source_unit, "gal", params)?;
+                    let (val, _) = convert_mass_to_volume(amount, &source_unit, "gal", params).map_err(crate::shared::error::AppError::Calculation)?;
                     ("gal", val)
                 } else {
-                    ("gal", convert_unit(amount, &source_unit, "gal")?)
+                    ("gal", convert_unit(amount, &source_unit, "gal").map_err(crate::shared::error::AppError::Calculation)?)
                 }
             },
             
             // Temperature conversions
-            ActionType::ConvertToC => ("C", convert_unit(amount, &source_unit, "C")?),
-            ActionType::ConvertToF => ("F", convert_unit(amount, &source_unit, "F")?),
+            ActionType::ConvertToC => ("C", convert_unit(amount, &source_unit, "C").map_err(crate::shared::error::AppError::Calculation)?),
+            ActionType::ConvertToF => ("F", convert_unit(amount, &source_unit, "F").map_err(crate::shared::error::AppError::Calculation)?),
             
             // Speed conversions
-            ActionType::ConvertToKMH => ("km/h", convert_unit(amount, &source_unit, "km/h")?),
-            ActionType::ConvertToMPH => ("m/h", convert_unit(amount, &source_unit, "m/h")?),
+            ActionType::ConvertToKMH => ("km/h", convert_unit(amount, &source_unit, "km/h").map_err(crate::shared::error::AppError::Calculation)?),
+            ActionType::ConvertToMPH => ("m/h", convert_unit(amount, &source_unit, "m/h").map_err(crate::shared::error::AppError::Calculation)?),
             
-            // Legacy cross-category actions (deprecated, but still supported for backward compatibility)
+            // Legacy cross-category actions
             ActionType::ConvertVolToG | ActionType::ConvertVolToKG | ActionType::ConvertVolToOZ | ActionType::ConvertVolToLB => {
                 let target_unit = match action_type {
                     ActionType::ConvertVolToG => "g",
@@ -251,7 +256,7 @@ impl Feature for UnitConverter {
                     ActionType::ConvertVolToLB => "lb",
                     _ => unreachable!(),
                 };
-                let (val, _) = convert_volume_to_mass(amount, &source_unit, target_unit, params)?;
+                let (val, _) = convert_volume_to_mass(amount, &source_unit, target_unit, params).map_err(crate::shared::error::AppError::Calculation)?;
                 (target_unit, val)
             },
             ActionType::ConvertMassToML | ActionType::ConvertMassToL | ActionType::ConvertMassToFlOz | ActionType::ConvertMassToCup | ActionType::ConvertMassToPint | ActionType::ConvertMassToQuart | ActionType::ConvertMassToGal => {
@@ -265,11 +270,11 @@ impl Feature for UnitConverter {
                     ActionType::ConvertMassToGal => "gal",
                     _ => unreachable!(),
                 };
-                let (val, _) = convert_mass_to_volume(amount, &source_unit, target_unit, params)?;
+                let (val, _) = convert_mass_to_volume(amount, &source_unit, target_unit, params).map_err(crate::shared::error::AppError::Calculation)?;
                 (target_unit, val)
             },
             
-            _ => return Err(ERR_UNSUPPORTED_ACTION.to_string()),
+            _ => return Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
         };
 
         // Format result with beautiful number formatting
@@ -291,7 +296,7 @@ impl Feature for UnitConverter {
 
 // Tauri commands
 #[tauri::command]
-pub async fn convert_units(request: ConvertUnitsRequest) -> Result<ConvertUnitsResponse, String> {
+pub async fn convert_units(request: ConvertUnitsRequest) -> crate::shared::error::AppResult<ConvertUnitsResponse> {
     // Note: The actual conversion logic will be handled on the frontend using convert-units library
     // This command is here for potential future server-side conversions or validation
     Ok(ConvertUnitsResponse {
@@ -302,21 +307,21 @@ pub async fn convert_units(request: ConvertUnitsRequest) -> Result<ConvertUnitsR
 }
 
 #[tauri::command]
-pub async fn get_units_for_category(category: String) -> Result<Vec<String>, String> {
+pub async fn get_units_for_category(category: String) -> crate::shared::error::AppResult<Vec<String>> {
     let units = match category.as_str() {
         "length" => vec!["mm", "cm", "m", "km", "in", "ft", "yd", "mi"],
         "mass" => vec!["mg", "g", "kg", "oz", "lb"],
         "volume" => vec!["ml", "cl", "dl", "L", "kl", "m3", "km3", "tsp", "Tbs", "in3", "fl-oz", "cup", "gal", "ft3", "yd3"],
         "temperature" => vec!["C", "F"],
         "speed" => vec!["km/h", "m/h", "ft/s"],
-        _ => return Err(format!("Unknown category: {}", category)),
+        _ => return Err(crate::shared::error::AppError::Validation(format!("Unknown category: {}", category))),
     };
     
     Ok(units.iter().map(|s| s.to_string()).collect())
 }
 
 #[tauri::command]
-pub async fn get_unit_settings() -> Result<serde_json::Value, String> {
+pub async fn get_unit_settings() -> crate::shared::error::AppResult<serde_json::Value> {
     Ok(json!({
         "default_from_unit": "m",
         "default_to_unit": "ft",

@@ -5,6 +5,7 @@
 //! to the features module.
 
 use crate::shared::types::*;
+use crate::shared::error::{AppResult, AppError};
 use crate::system::automation;
 use crate::core::context;
 use crate::core::features;
@@ -13,7 +14,7 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 
 /// Capture selected text from the active application
 #[tauri::command]
-pub async fn capture_selection(app: tauri::AppHandle, mode: Option<String>) -> Result<CaptureResult, String> {
+pub async fn capture_selection(app: tauri::AppHandle, mode: Option<String>) -> AppResult<CaptureResult> {
     let source = mode.unwrap_or_else(|| "clipboard".to_string());
     
     println!("🔵 [DEBUG] [CaptureSelection] ========== CAPTURE SELECTION CALLED ==========");
@@ -117,7 +118,7 @@ pub async fn get_command_items(
     _app: tauri::AppHandle,
     metrics: tauri::State<'_, context::UsageMetrics>,
     captured_text: Option<String>,
-) -> Result<Vec<CommandItem>, String> {
+) -> AppResult<Vec<CommandItem>> {
     // Get all command items from features
     let items = features::get_all_command_items();
     
@@ -141,8 +142,10 @@ pub async fn get_command_items(
 
 /// Execute an action
 #[tauri::command]
-pub async fn execute_action(request: ExecuteActionRequest) -> Result<ExecuteActionResponse, String> {
-    features::execute_feature_action(&request)
+pub async fn execute_action(request: ExecuteActionRequest) -> AppResult<ExecuteActionResponse> {
+    // features::execute_feature_action currently returns Result<..., String>.
+    // We need to map it.
+    features::execute_feature_action(&request).await.map_err(AppError::from)
 }
 
 /// Record command usage for intelligent ranking
@@ -150,7 +153,7 @@ pub async fn execute_action(request: ExecuteActionRequest) -> Result<ExecuteActi
 pub fn record_command_usage(
     metrics: tauri::State<context::UsageMetrics>,
     command_id: String,
-) -> Result<(), String> {
+) -> AppResult<()> {
     metrics.record_usage(&command_id);
     Ok(())
 }

@@ -3,14 +3,20 @@
 //! Provides clipboard history management and paste automation.
 
 use crate::shared::types::*;
-use crate::core::clipboard::{ClipboardHistory, ClipboardItem, ClipboardMonitor};
+use crate::core::clipboard::{ClipboardHistory, ClipboardMonitor};
+use crate::shared::types::ClipboardHistoryItem;
+use crate::core::context;
 use crate::system::automation;
 use super::Feature;
-use tauri::Manager;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use async_trait::async_trait;
+use tauri::Manager;
+use crate::core::context::category::ContextCategory;
 
 pub struct ClipboardFeature;
 
+#[async_trait]
 impl Feature for ClipboardFeature {
     fn id(&self) -> &str {
         "clipboard"
@@ -20,30 +26,66 @@ impl Feature for ClipboardFeature {
         vec![CommandItem {
             id: "widget_clipboard".to_string(),
             label: "Clipboard History".to_string(),
-            description: Some("View and paste from clipboard history".to_string()),
+            description: Some("View and manage clipboard history".to_string()),
             action_type: None,
             widget_type: Some("clipboard".to_string()),
-            category: None, // Will be assigned in get_all_command_items()
+            category: Some(ContextCategory::General),
         }]
     }
     
     fn action_commands(&self) -> Vec<CommandItem> {
-        // Clipboard doesn't have direct actions (uses widget)
-        vec![]
+        vec![
+            CommandItem {
+                id: "show_clipboard_history".to_string(),
+                label: "Show Clipboard History".to_string(),
+                description: Some("Browse recently copied items".to_string()),
+                action_type: None,
+                widget_type: Some("clipboard".to_string()),
+                category: Some(ContextCategory::General),
+            },
+            CommandItem {
+                id: "pause_clipboard".to_string(),
+                label: "Pause History".to_string(),
+                description: Some("Pause clipboard monitoring".to_string()),
+                action_type: Some(ActionType::PauseClipboard),
+                widget_type: None,
+                category: Some(ContextCategory::General),
+            },
+            CommandItem {
+                id: "resume_clipboard".to_string(),
+                label: "Resume History".to_string(),
+                description: Some("Resume clipboard monitoring".to_string()),
+                action_type: Some(ActionType::ResumeClipboard),
+                widget_type: None,
+                category: Some(ContextCategory::General),
+            },
+            CommandItem {
+                id: "clear_clipboard_history".to_string(),
+                label: "Clear History".to_string(),
+                description: Some("Clear clipboard history".to_string()),
+                action_type: Some(ActionType::ClearClipboardHistory),
+                widget_type: None,
+                category: Some(ContextCategory::General),
+            },
+        ]
     }
     
-    fn execute_action(
+    async fn execute_action(
         &self,
         _action: &ActionType,
         _params: &serde_json::Value,
-    ) -> Result<ExecuteActionResponse, String> {
-        Err("Clipboard feature doesn't support direct actions".to_string())
+    ) -> crate::shared::error::AppResult<ExecuteActionResponse> {
+        Err(crate::shared::error::AppError::Feature("Clipboard feature doesn't support direct actions".to_string()))
+    }
+    
+    fn get_context_boost(&self, _captured_text: &str) -> HashMap<String, f64> {
+        HashMap::new()
     }
 }
 
 /// Get clipboard history items
 #[tauri::command]
-pub fn get_clipboard_history(history: tauri::State<ClipboardHistory>) -> Result<Vec<ClipboardItem>, String> {
+pub fn get_clipboard_history(history: tauri::State<ClipboardHistory>) -> crate::shared::error::AppResult<Vec<ClipboardHistoryItem>> {
     Ok(history.get_items())
 }
 
@@ -54,10 +96,10 @@ pub async fn paste_clipboard_item(
     history: tauri::State<'_, ClipboardHistory>,
     last_active_app: tauri::State<'_, Arc<Mutex<Option<String>>>>,
     item_id: String,
-) -> Result<(), String> {
+) -> crate::shared::error::AppResult<()> {
     let item = history
         .get_item_by_id(&item_id)
-        .ok_or_else(|| "Clipboard item not found".to_string())?;
+        .ok_or_else(|| crate::shared::error::AppError::Validation("Clipboard item not found".to_string()))?;
 
     println!("[PasteItem] Pasting item: {}", item.id);
 
@@ -66,7 +108,7 @@ pub async fn paste_clipboard_item(
     use tauri_plugin_clipboard_manager::ClipboardExt;
     app.clipboard()
         .write_text(item.content.clone())
-        .map_err(|e| format!("Failed to write to clipboard: {}", e))?;
+        .map_err(|e| crate::shared::error::AppError::System(format!("Failed to write to clipboard: {}", e)))?;
 
     let target_app = {
         let last_app_guard = match last_active_app.lock() {
@@ -92,10 +134,10 @@ pub async fn paste_clipboard_item(
     println!("[PasteItem] Target app: {}", target_app);
 
     if let Some(window) = app.get_webview_window("palette-window") {
-        window.hide().map_err(|e| format!("Failed to hide palette: {}", e))?;
+        window.hide().map_err(|e| crate::shared::error::AppError::System(format!("Failed to hide palette: {}", e)))?;
     }
     if let Some(window) = app.get_webview_window("clipboard-window") {
-        window.hide().map_err(|e| format!("Failed to hide clipboard: {}", e))?;
+        window.hide().map_err(|e| crate::shared::error::AppError::System(format!("Failed to hide clipboard: {}", e)))?;
     }
 
     tauri::async_runtime::spawn(async move {
@@ -117,20 +159,20 @@ pub async fn paste_clipboard_item(
 
 /// Clear all clipboard history
 #[tauri::command]
-pub fn clear_clipboard_history(history: tauri::State<ClipboardHistory>) -> Result<(), String> {
+pub fn clear_clipboard_history(history: tauri::State<ClipboardHistory>) -> crate::shared::error::AppResult<()> {
     history.clear();
     Ok(())
 }
 
 /// Toggle clipboard monitoring on/off
 #[tauri::command]
-pub fn toggle_clipboard_monitor(monitor: tauri::State<ClipboardMonitor>) -> Result<bool, String> {
+pub fn toggle_clipboard_monitor(monitor: tauri::State<ClipboardMonitor>) -> crate::shared::error::AppResult<bool> {
     let enabled = monitor.toggle();
     Ok(enabled)
 }
 
 /// Get clipboard monitor status
 #[tauri::command]
-pub fn get_clipboard_monitor_status(monitor: tauri::State<ClipboardMonitor>) -> Result<bool, String> {
+pub fn get_clipboard_monitor_status(monitor: tauri::State<ClipboardMonitor>) -> crate::shared::error::AppResult<bool> {
     Ok(monitor.is_enabled())
 }

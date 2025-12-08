@@ -3,12 +3,12 @@
 //! Handles window positioning, cursor detection, and window lifecycle.
 
 use crate::shared::types::{CursorPosition, ScreenBounds, WindowPosition};
-use crate::api::error::{format_window_error, CommandResult};
+use crate::shared::error::{AppResult, AppError};
 use tauri::Manager;
 
 /// Get the current cursor position
 #[tauri::command]
-pub fn get_cursor_position() -> CommandResult<CursorPosition> {
+pub fn get_cursor_position() -> AppResult<CursorPosition> {
     use mouse_position::mouse_position::Mouse;
     
     match Mouse::get_mouse_position() {
@@ -16,17 +16,17 @@ pub fn get_cursor_position() -> CommandResult<CursorPosition> {
             x: x as f64,
             y: y as f64,
         }),
-        Mouse::Error => Err("Failed to get cursor position".to_string()),
+        Mouse::Error => Err(AppError::System("Failed to get cursor position".to_string())),
     }
 }
 
 /// Get the primary monitor bounds
 #[tauri::command]
-pub fn get_primary_monitor_bounds(app: tauri::AppHandle) -> CommandResult<ScreenBounds> {
+pub fn get_primary_monitor_bounds(app: tauri::AppHandle) -> AppResult<ScreenBounds> {
     // Get the primary monitor
     let monitor = app.primary_monitor()
-        .map_err(|e| format_window_error("get primary monitor", &e.to_string()))?
-        .ok_or_else(|| "No primary monitor found".to_string())?;
+        .map_err(|e| AppError::System(format!("Failed to get primary monitor: {}", e)))?
+        .ok_or_else(|| AppError::System("No primary monitor found".to_string()))?;
     
     let position = monitor.position();
     let size = monitor.size();
@@ -82,9 +82,9 @@ pub fn calculate_palette_position(
 
 /// Hide the palette window
 #[tauri::command]
-pub async fn hide_palette_window(app: tauri::AppHandle) -> CommandResult<()> {
+pub async fn hide_palette_window(app: tauri::AppHandle) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("palette-window") {
-        window.hide().map_err(|e| format_window_error("hide palette", &e.to_string()))?;
+        window.hide().map_err(|e| AppError::System(format!("Failed to hide palette: {}", e)))?;
     }
     Ok(())
 }
@@ -95,12 +95,12 @@ pub async fn hide_palette_window(app: tauri::AppHandle) -> CommandResult<()> {
 
 /// Show a widget window
 #[tauri::command]
-pub async fn show_widget(app: tauri::AppHandle, widget: String) -> CommandResult<()> {
+pub async fn show_widget(app: tauri::AppHandle, widget: String) -> AppResult<()> {
     // FIXED: Call async version directly instead of sync wrapper
     if let Some(window_lock) = app.try_state::<std::sync::Arc<tokio::sync::Mutex<()>>>() {
         crate::show_widget_window_async(&app, &widget, false, window_lock.inner().clone()).await
-            .map_err(|e| format_window_error(&format!("show {} widget", widget), &e.to_string()))
+            .map_err(|e| AppError::System(format!("Failed to show {} widget: {}", widget, e)))
     } else {
-        Err(format_window_error(&format!("show {} widget", widget), "Window lock not available"))
+        Err(AppError::System("Window lock not available".to_string()))
     }
 }

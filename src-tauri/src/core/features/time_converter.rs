@@ -10,6 +10,7 @@ use crate::shared::types::{ConvertTimeRequest, ConvertTimeResponse, TimezoneInfo
 use super::Feature;
 use std::collections::HashMap;
 use regex::Regex;
+use async_trait::async_trait;
 
 /// Timezone abbreviation to IANA ID mappings (expanded)
 const TIMEZONE_ABBREVIATIONS: &[(&str, &str)] = &[
@@ -113,6 +114,7 @@ const TIMEZONE_ABBREVIATIONS: &[(&str, &str)] = &[
 
 pub struct TimeConverterFeature;
 
+#[async_trait]
 impl Feature for TimeConverterFeature {
     fn id(&self) -> &str {
         "time_converter"
@@ -133,11 +135,11 @@ impl Feature for TimeConverterFeature {
         generate_timezone_commands()
     }
     
-    fn execute_action(
+    async fn execute_action(
         &self,
         action: &ActionType,
         params: &serde_json::Value,
-    ) -> Result<ExecuteActionResponse, String> {
+    ) -> crate::shared::error::AppResult<ExecuteActionResponse> {
         println!("[TimeConverter] 🎬 ========== ACTION EXECUTION ==========");
         println!("[TimeConverter] 🎯 Action: {:?}", action);
         println!("[TimeConverter] 📋 Params: {}", params);
@@ -150,7 +152,7 @@ impl Feature for TimeConverterFeature {
                 
                 println!("[TimeConverter] 🔍 Parsing time from text: '{}'", text_input);
                 let parsed = parse_time_from_text(text_input)
-                    .ok_or_else(|| "Failed to parse time from text, likely a conversion result.".to_string())?;
+                    .ok_or_else(|| crate::shared::error::AppError::Validation("Failed to parse time from text, likely a conversion result.".to_string()))?;
                 
                 println!("[TimeConverter] 📊 Parsed result:");
                 println!("  original text: '{}'", text_input);
@@ -183,7 +185,7 @@ impl Feature for TimeConverterFeature {
                     })),
                 })
             }
-            _ => Err("Not a time conversion action".to_string()),
+            _ => Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
         }
     }
     
@@ -193,7 +195,7 @@ impl Feature for TimeConverterFeature {
 }
 
 /// Parse natural language time input and convert to target timezone
-pub fn parse_and_convert_time(request: ConvertTimeRequest) -> Result<ConvertTimeResponse, String> {
+pub fn parse_and_convert_time(request: ConvertTimeRequest) -> crate::shared::error::AppResult<ConvertTimeResponse> {
     println!("[TimeConverter] 🔵 ========== CONVERSION REQUEST ==========");
     println!("[TimeConverter] 📥 Request: time_input='{}', target_timezone='{}', source_timezone={:?}", 
         request.time_input, request.target_timezone, request.source_timezone);
@@ -210,14 +212,14 @@ pub fn parse_and_convert_time(request: ConvertTimeRequest) -> Result<ConvertTime
         .map_err(|e| {
             let err_msg = format!("Failed to parse time input '{}': {}", request.time_input, e);
             println!("[TimeConverter] ❌ {}", err_msg);
-            err_msg
+            crate::shared::error::AppError::Validation(err_msg)
         })?;
     println!("[TimeConverter] 📅 Parsed local datetime: {}", parsed_local_dt.format("%Y-%m-%d %H:%M:%S %Z"));
     
     // Parse source timezone
     println!("[TimeConverter] 🌍 Parsing source timezone: {}", source_tz_str);
     let source_tz: Tz = source_tz_str.parse()
-        .map_err(|_| format!("Invalid source timezone: {}", source_tz_str))?;
+        .map_err(|_| crate::shared::error::AppError::Validation(format!("Invalid source timezone: {}", source_tz_str)))?;
     
     // Get the naive datetime from the parsed local time
     // This is the time the user typed, which we need to interpret AS BEING IN source_tz
@@ -227,7 +229,7 @@ pub fn parse_and_convert_time(request: ConvertTimeRequest) -> Result<ConvertTime
     // Interpret this naive datetime AS BEING IN the source timezone
     let source_dt = source_tz.from_local_datetime(&naive)
         .single()
-        .ok_or_else(|| format!("Ambiguous or invalid time in timezone {}", source_tz_str))?;
+        .ok_or_else(|| crate::shared::error::AppError::Validation(format!("Ambiguous or invalid time in timezone {}", source_tz_str)))?;
     println!("[TimeConverter] 🌐 Source datetime ({}): {}", source_tz_str, source_dt.format("%Y-%m-%d %H:%M:%S %Z"));
     
     println!("[TimeConverter] 🔍 Parsing target timezone: '{}'", request.target_timezone);
@@ -235,7 +237,7 @@ pub fn parse_and_convert_time(request: ConvertTimeRequest) -> Result<ConvertTime
         .map_err(|e| {
             let err_msg = format!("Invalid target timezone '{}': {:?}", request.target_timezone, e);
             println!("[TimeConverter] ❌ {}", err_msg);
-            err_msg
+            crate::shared::error::AppError::Validation(err_msg)
         })?;
     println!("[TimeConverter] 🎯 Parsed target timezone successfully");
     
@@ -684,15 +686,15 @@ pub fn parse_time_from_text(text: &str) -> Option<ParsedTimeInput> {
 }
 
 #[tauri::command]
-pub async fn parse_time_from_selection(text: String) -> Result<ParsedTimeInput, String> {
+pub async fn parse_time_from_selection(text: String) -> crate::shared::error::AppResult<ParsedTimeInput> {
     parse_time_from_text(&text)
-        .ok_or_else(|| "Failed to parse time from selection, likely a conversion result.".to_string())
+        .ok_or_else(|| crate::shared::error::AppError::Validation("Failed to parse time from selection, likely a conversion result.".to_string()))
 }
 
 /// Get the system's IANA timezone (e.g., "Asia/Seoul", "America/New_York")
 /// This reads from macOS System Settings and is NOT affected by VPNs
 #[tauri::command]
-pub async fn get_system_timezone() -> Result<String, String> {
+pub async fn get_system_timezone() -> crate::shared::error::AppResult<String> {
     match iana_time_zone::get_timezone() {
         Ok(tz) => {
             println!("[TimeConverter] 🖥️  Detected system timezone: {}", tz);
@@ -707,12 +709,12 @@ pub async fn get_system_timezone() -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn convert_time(request: ConvertTimeRequest) -> Result<ConvertTimeResponse, String> {
+pub async fn convert_time(request: ConvertTimeRequest) -> crate::shared::error::AppResult<ConvertTimeResponse> {
     parse_and_convert_time(request)
 }
 
 #[tauri::command]
-pub async fn get_timezones() -> Result<Vec<TimezoneInfo>, String> {
+pub async fn get_timezones() -> crate::shared::error::AppResult<Vec<TimezoneInfo>> {
     Ok(get_all_timezones())
 }
 
@@ -736,7 +738,7 @@ mod tests {
         );
         assert_eq!(
             detect_timezone_from_text("5pm est"),
-            Some(("America/New_York".to_string(), Some("est".to_string())))
+            Some(("America/New_York".to_string(), Some("EST".to_string())))
         );
         assert_eq!(
             detect_timezone_from_text("europe/rome"),

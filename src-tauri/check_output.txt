@@ -1,0 +1,1340 @@
+    Checking productivity-widgets v0.1.0 (/Users/lilitgrigorian/Desktop/tool-suite-antigravity/src-tauri)
+error: cannot find macro `sel_impl` in this scope
+  --> src/system/automation/macos.rs:37:29
+   |
+37 |         let workspace: id = msg_send![class!(NSWorkspace), sharedWorkspace];
+   |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the macro `sel` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: cannot find macro `sel_impl` in this scope
+  --> src/system/automation/macos.rs:38:29
+   |
+38 |         let front_app: id = msg_send![workspace, frontmostApplication];
+   |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the macro `sel` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: cannot find macro `sel_impl` in this scope
+  --> src/system/automation/macos.rs:44:24
+   |
+44 |         let name: id = msg_send![front_app, localizedName];
+   |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the macro `sel` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: cannot find macro `sel_impl` in this scope
+  --> src/system/automation/macos.rs:65:29
+   |
+65 |         let workspace: id = msg_send![class!(NSWorkspace), sharedWorkspace];
+   |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the macro `sel` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: cannot find macro `sel_impl` in this scope
+  --> src/system/automation/macos.rs:66:32
+   |
+66 |         let running_apps: id = msg_send![workspace, runningApplications];
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the macro `sel` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: cannot find macro `sel_impl` in this scope
+  --> src/system/automation/macos.rs:67:33
+   |
+67 |         let count: NSUInteger = msg_send![running_apps, count];
+   |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the macro `sel` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: cannot find macro `sel_impl` in this scope
+  --> src/system/automation/macos.rs:72:27
+   |
+72 |             let app: id = msg_send![running_apps, objectAtIndex:i];
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the macro `sel` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: cannot find macro `sel_impl` in this scope
+  --> src/system/automation/macos.rs:73:28
+   |
+73 |             let name: id = msg_send![app, localizedName];
+   |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the macro `sel` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: cannot find macro `sel_impl` in this scope
+  --> src/system/automation/macos.rs:90:27
+   |
+90 |             let _: bool = msg_send![target_app, activateWithOptions:options];
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the macro `sel` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unused imports: `DateTime` and `Utc`
+ --> src/core/features/time_converter.rs:6:14
+  |
+6 | use chrono::{DateTime, Local, TimeZone, Utc, Offset};
+  |              ^^^^^^^^                   ^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `AppHandle` and `Manager`
+ --> src/core/features/text_analyser.rs:1:13
+  |
+1 | use tauri::{AppHandle, Manager};
+  |             ^^^^^^^^^  ^^^^^^^
+
+warning: unused import: `score_by_context`
+  --> src/core/context.rs:12:48
+   |
+12 | pub use ranking::{UsageMetrics, rank_commands, score_by_context};
+   |                                                ^^^^^^^^^^^^^^^^
+
+warning: unused imports: `ContextCategory`, `detect_content_category`, `get_action_category`, and `get_widget_category`
+  --> src/core/context.rs:13:20
+   |
+13 | pub use category::{ContextCategory, detect_content_category, get_action_category, get_widget_category};
+   |                    ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `validation::validate_action`
+  --> src/core/context.rs:14:9
+   |
+14 | pub use validation::validate_action;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/nswindow.rs:79:22
+   |
+79 |     let ns_app: id = msg_send![class!(NSApplication), sharedApplication];
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: `#[warn(unexpected_cfgs)]` on by default
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/nswindow.rs:79:32
+   |
+79 |     let ns_app: id = msg_send![class!(NSApplication), sharedApplication];
+   |                                ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `class` crate for guidance on how handle this unexpected cfg
+   = help: the macro `class` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/nswindow.rs:85:31
+   |
+85 |     let current_policy: i64 = msg_send![ns_app, activationPolicy];
+   |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/nswindow.rs:94:25
+   |
+94 |     let success: bool = msg_send![ns_app, setActivationPolicy: NS_APPLICATION_ACTIVATION_POLICY_ACCESSORY];
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/nswindow.rs:97:36
+   |
+97 |         let verified_policy: i64 = msg_send![ns_app, activationPolicy];
+   |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:121:34
+    |
+121 |         let current_thread: id = msg_send![class!(NSThread), currentThread];
+    |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:121:44
+    |
+121 |         let current_thread: id = msg_send![class!(NSThread), currentThread];
+    |                                            ^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `class` crate for guidance on how handle this unexpected cfg
+    = help: the macro `class` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:122:29
+    |
+122 |         let is_main: bool = msg_send![current_thread, isMainThread];
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:156:30
+    |
+156 |         let main_queue: id = msg_send![class!(NSOperationQueue), mainQueue];
+    |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:156:40
+    |
+156 |         let main_queue: id = msg_send![class!(NSOperationQueue), mainQueue];
+    |                                        ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `class` crate for guidance on how handle this unexpected cfg
+    = help: the macro `class` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:157:21
+    |
+157 |         let _: () = msg_send![main_queue, addOperationWithBlock: block];
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:197:36
+    |
+197 |             let content_view: id = msg_send![ns_window, contentView];
+    |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:205:25
+    |
+205 |             let _: () = msg_send![content_view, retain];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:208:33
+    |
+208 |             let frame: NSRect = msg_send![ns_window, frame];
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:224:25
+    |
+224 |             let _: () = msg_send![content_view, release];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:227:25
+    |
+227 |             let _: () = msg_send![ns_window, orderOut: nil];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:274:31
+    |
+274 |     let ns_window_class: id = msg_send![class!(NSWindow), class];
+    |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:274:41
+    |
+274 |     let ns_window_class: id = msg_send![class!(NSWindow), class];
+    |                                         ^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `class` crate for guidance on how handle this unexpected cfg
+    = help: the macro `class` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:275:34
+    |
+275 |     let is_kind_of_class: bool = msg_send![ns_window, isKindOfClass: ns_window_class];
+    |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:281:30
+    |
+281 |     let current_level: i64 = msg_send![ns_window, level];
+    |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:286:17
+    |
+286 |     let _: () = msg_send![ns_window, setLevel: NS_STATUS_WINDOW_LEVEL];
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:289:31
+    |
+289 |     let verified_level: i64 = msg_send![ns_window, level];
+    |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:297:56
+    |
+297 |     let current_behavior: NSWindowCollectionBehavior = msg_send![ns_window, collectionBehavior];
+    |                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:311:17
+    |
+311 |     let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:314:57
+    |
+314 |     let verified_behavior: NSWindowCollectionBehavior = msg_send![ns_window, collectionBehavior];
+    |                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:326:36
+    |
+326 |     let is_on_active_space: bool = msg_send![ns_window, isOnActiveSpace];
+    |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:330:32
+    |
+330 |     let can_become_key: bool = msg_send![ns_window, canBecomeKeyWindow];
+    |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:331:33
+    |
+331 |     let can_become_main: bool = msg_send![ns_window, canBecomeMainWindow];
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:424:38
+    |
+424 |             let current_level: i64 = msg_send![ns_window, level];
+    |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:426:29
+    |
+426 |                 let _: () = msg_send![ns_window, setLevel: NS_STATUS_WINDOW_LEVEL];
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:427:43
+    |
+427 |                 let verified_level: i64 = msg_send![ns_window, level];
+    |                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:433:64
+    |
+433 |             let current_behavior: NSWindowCollectionBehavior = msg_send![ns_window, collectionBehavior];
+    |                                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:440:29
+    |
+440 |                 let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:441:69
+    |
+441 |                 let verified_behavior: NSWindowCollectionBehavior = msg_send![ns_window, collectionBehavior];
+    |                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:509:36
+    |
+509 |             let is_visible: bool = msg_send![ns_window, isVisible];
+    |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:510:38
+    |
+510 |             let is_on_screen: bool = msg_send![ns_window, isOnActiveSpace];
+    |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:513:33
+    |
+513 |             let frame: NSRect = msg_send![ns_window, frame];
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:559:40
+    |
+559 |             let can_become_key: bool = msg_send![ns_window, canBecomeKeyWindow];
+    |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:567:25
+    |
+567 |             let _: () = msg_send![ns_window, makeKeyWindow];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:570:32
+    |
+570 |             let is_key: bool = msg_send![ns_window, isKeyWindow];
+    |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:603:25
+    |
+603 |             let _: () = msg_send![ns_window, setLevel: NS_STATUS_WINDOW_LEVEL];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:610:25
+    |
+610 |             let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:613:39
+    |
+613 |             let verified_level: i64 = msg_send![ns_window, level];
+    |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:614:65
+    |
+614 |             let verified_behavior: NSWindowCollectionBehavior = msg_send![ns_window, collectionBehavior];
+    |                                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:671:38
+    |
+671 |             let current_style: u64 = msg_send![ns_window, styleMask];
+    |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:673:25
+    |
+673 |             let _: () = msg_send![ns_window, setStyleMask: new_style];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:677:25
+    |
+677 |             let _: () = msg_send![ns_window, setLevel: NS_POPUP_MENU_WINDOW_LEVEL];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:678:39
+    |
+678 |             let verified_level: i64 = msg_send![ns_window, level];
+    |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:685:25
+    |
+685 |             let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:686:65
+    |
+686 |             let verified_behavior: NSWindowCollectionBehavior = msg_send![ns_window, collectionBehavior];
+    |                                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:690:25
+    |
+690 |             let _: () = msg_send![ns_window, orderFrontRegardless];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:694:30
+    |
+694 |             let ns_app: id = msg_send![class!(NSApplication), sharedApplication];
+    |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:694:40
+    |
+694 |             let ns_app: id = msg_send![class!(NSApplication), sharedApplication];
+    |                                        ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `class` crate for guidance on how handle this unexpected cfg
+    = help: the macro `class` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:695:25
+    |
+695 |             let _: () = msg_send![ns_app, activateIgnoringOtherApps: YES];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:699:25
+    |
+699 |             let _: () = msg_send![ns_window, makeKeyAndOrderFront: nil];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:700:32
+    |
+700 |             let is_key: bool = msg_send![ns_window, isKeyWindow];
+    |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:704:36
+    |
+704 |             let is_visible: bool = msg_send![ns_window, isVisible];
+    |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:705:44
+    |
+705 |             let is_on_active_space: bool = msg_send![ns_window, isOnActiveSpace];
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:747:36
+    |
+747 |             let is_visible: bool = msg_send![ns_window, isVisible];
+    |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:748:32
+    |
+748 |             let is_key: bool = msg_send![ns_window, isKeyWindow];
+    |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:749:33
+    |
+749 |             let is_main: bool = msg_send![ns_window, isMainWindow];
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:750:40
+    |
+750 |             let can_become_key: bool = msg_send![ns_window, canBecomeKeyWindow];
+    |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/nswindow.rs:751:41
+    |
+751 |             let can_become_main: bool = msg_send![ns_window, canBecomeMainWindow];
+    |                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/panel.rs:67:29
+   |
+67 |             let panel: id = msg_send![class!(NSPanel), alloc];
+   |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/panel.rs:67:39
+   |
+67 |             let panel: id = msg_send![class!(NSPanel), alloc];
+   |                                       ^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `class` crate for guidance on how handle this unexpected cfg
+   = help: the macro `class` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/panel.rs:68:29
+   |
+68 |               let panel: id = msg_send![panel, initWithContentRect: rect
+   |  _____________________________^
+69 | |                                                 styleMask: style_mask
+70 | |                                                 backing: backing
+71 | |                                                 defer: NO];
+   | |__________________________________________________________^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/panel.rs:74:25
+   |
+74 |             let _: () = msg_send![panel, setBecomesKeyOnlyIfNeeded: YES];
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/panel.rs:75:25
+   |
+75 |             let _: () = msg_send![panel, setFloatingPanel: YES];
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/panel.rs:76:25
+   |
+76 |             let _: () = msg_send![panel, setWorksWhenModal: YES];
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/panel.rs:77:25
+   |
+77 |             let _: () = msg_send![panel, setHidesOnDeactivate: NO];
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/panel.rs:80:25
+   |
+80 |             let _: () = msg_send![panel, setOpaque: NO];
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/panel.rs:81:35
+   |
+81 |             let clear_color: id = msg_send![class!(NSColor), clearColor];
+   |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/panel.rs:81:45
+   |
+81 |             let clear_color: id = msg_send![class!(NSColor), clearColor];
+   |                                             ^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `class` crate for guidance on how handle this unexpected cfg
+   = help: the macro `class` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/panel.rs:82:25
+   |
+82 |             let _: () = msg_send![panel, setBackgroundColor: clear_color];
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/panel.rs:83:25
+   |
+83 |             let _: () = msg_send![panel, setAlphaValue: 1.0];
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/panel.rs:86:25
+   |
+86 |             let _: () = msg_send![panel, setHasShadow: YES];
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/panel.rs:90:25
+   |
+90 |             let _: () = msg_send![panel, setLevel: NS_SCREEN_SAVER_WINDOW_LEVEL];
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/window/panel.rs:95:25
+   |
+95 |             let _: () = msg_send![panel, setCollectionBehavior: behavior];
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/panel.rs:100:25
+    |
+100 |             let _: () = msg_send![panel, setAcceptsMouseMovedEvents: YES];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/panel.rs:101:25
+    |
+101 |             let _: () = msg_send![panel, setIgnoresMouseEvents: NO];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/panel.rs:115:25
+    |
+115 |             let _: () = msg_send![self.panel, orderFrontRegardless];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/panel.rs:118:36
+    |
+118 |             let is_visible: bool = msg_send![self.panel, isVisible];
+    |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/panel.rs:119:30
+    |
+119 |             let alpha: f64 = msg_send![self.panel, alphaValue];
+    |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/panel.rs:132:25
+    |
+132 |             let _: () = msg_send![self.panel, orderOut: nil];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/panel.rs:144:25
+    |
+144 |             let _: () = msg_send![view, setOpaque: NO];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/panel.rs:147:25
+    |
+147 |             let _: () = msg_send![self.panel, setContentView: view];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/panel.rs:162:33
+    |
+162 |             let frame: NSRect = msg_send![self.panel, frame];
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/panel.rs:167:25
+    |
+167 |             let _: () = msg_send![self.panel, setFrame: new_rect display: YES];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/panel.rs:175:33
+    |
+175 |             let frame: NSRect = msg_send![self.panel, frame];
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/panel.rs:180:25
+    |
+180 |             let _: () = msg_send![self.panel, setFrame: new_rect display: YES];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/panel.rs:188:13
+    |
+188 |             msg_send![self.panel, isVisible]
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> src/system/window/panel.rs:197:25
+    |
+197 |             let _: () = msg_send![self.panel, release];
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: no expected values for `feature`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = help: the macro `sel_impl` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/automation/macos.rs:37:39
+   |
+37 |         let workspace: id = msg_send![class!(NSWorkspace), sharedWorkspace];
+   |                                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `class` crate for guidance on how handle this unexpected cfg
+   = help: the macro `class` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> src/system/automation/macos.rs:65:39
+   |
+65 |         let workspace: id = msg_send![class!(NSWorkspace), sharedWorkspace];
+   |                                       ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `class` crate for guidance on how handle this unexpected cfg
+   = help: the macro `class` may come from an old version of the `objc` crate, try updating your dependency with `cargo update -p objc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unused import: `detect_text_selection`
+  --> src/system/automation.rs:15:5
+   |
+15 |     detect_text_selection, // ← NEW: Smart selection detection
+   |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: `productivity-widgets` (lib) generated 100 warnings
+error: could not compile `productivity-widgets` (lib) due to 9 previous errors; 100 warnings emitted

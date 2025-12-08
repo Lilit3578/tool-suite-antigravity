@@ -6,10 +6,11 @@
 use crate::shared::types::ActionType;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// Context categories for content detection and action filtering
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
 pub enum ContextCategory {
     /// Length measurements (meters, feet, kilometers, etc.)
     Length,
@@ -252,6 +253,11 @@ pub fn get_action_category(action: &ActionType) -> Option<ContextCategory> {
         
         // Time zone conversion → Time
         ActionType::ConvertTime(_) => Some(ContextCategory::Time),
+        
+        // System actions
+        ActionType::ClearClipboardHistory
+        | ActionType::PauseClipboard
+        | ActionType::ResumeClipboard => Some(ContextCategory::General),
     }
 }
 

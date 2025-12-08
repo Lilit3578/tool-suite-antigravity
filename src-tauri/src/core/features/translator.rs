@@ -7,9 +7,11 @@ use crate::shared::settings::AppSettings;
 use crate::core::context;
 use super::Feature;
 use std::collections::HashMap;
+use async_trait::async_trait;
 
 pub struct TranslatorFeature;
 
+#[async_trait]
 impl Feature for TranslatorFeature {
     fn id(&self) -> &str {
         "translator"
@@ -69,11 +71,11 @@ impl Feature for TranslatorFeature {
             .collect()
     }
     
-    fn execute_action(
+    async fn execute_action(
         &self,
         action: &ActionType,
         params: &serde_json::Value,
-    ) -> Result<ExecuteActionResponse, String> {
+    ) -> crate::shared::error::AppResult<ExecuteActionResponse> {
         let target_lang = match action {
             ActionType::TranslateEn => "en",
             ActionType::TranslateZh => "zh",
@@ -101,12 +103,13 @@ impl Feature for TranslatorFeature {
             ActionType::TranslateDa => "da",
             ActionType::TranslateFi => "fi",
             ActionType::TranslateHu => "hu",
-            _ => return Err("Not a translation action".to_string()),
+            _ => return Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
         };
         
         let text = params.get("text")
             .and_then(|v| v.as_str())
-            .ok_or("Missing 'text' parameter")?;
+            .ok_or_else(|| crate::shared::error::AppError::Validation("Missing 'text' parameter".to_string()))?;
+            
         let source_lang = params.get("source_lang")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
@@ -118,10 +121,8 @@ impl Feature for TranslatorFeature {
             provider: None,
         };
         
-        // Execute translation synchronously using tokio block_on
-        let response = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(translate_text(translate_request))
-        })?;
+        // Execute translation asynchronously
+        let response = translate_text(translate_request).await?;
         
         Ok(ExecuteActionResponse {
             result: response.translated,
@@ -169,8 +170,8 @@ impl Feature for TranslatorFeature {
 /// Uses the unofficial Google Translate API endpoint (free tier).
 /// For production, consider using the official Google Cloud Translation API.
 #[tauri::command]
-pub async fn translate_text(request: TranslateRequest) -> Result<TranslateResponse, String> {
-    let _settings = AppSettings::load().unwrap_or_default();
+pub async fn translate_text(request: TranslateRequest) -> crate::shared::error::AppResult<TranslateResponse> {
+    let _settings = AppSettings::load().await.unwrap_or_default();
     
     let client = reqwest::Client::new();
     
@@ -211,8 +212,9 @@ pub async fn translate_text(request: TranslateRequest) -> Result<TranslateRespon
                             .map(|s| s.to_string());
 
                         if translated.is_empty() {
+                            // Fallback if parsing fails but request succeeded
                             Ok(TranslateResponse {
-                                translated: format!("[Translation of: {}]", request.text),
+                                translated: request.text.clone(),
                                 detected_source_lang: Some("auto".to_string()),
                             })
                         } else {
@@ -224,26 +226,17 @@ pub async fn translate_text(request: TranslateRequest) -> Result<TranslateRespon
                     }
                     Err(e) => {
                         eprintln!("Failed to parse translation response: {}", e);
-                        Ok(TranslateResponse {
-                            translated: format!("[Translation of: {}]", request.text),
-                            detected_source_lang: Some("auto".to_string()),
-                        })
+                         Err(crate::shared::error::AppError::Unknown(format!("Failed to parse translation API response: {}", e)))
                     }
                 }
             } else {
                 eprintln!("Translation API returned error: {}", response.status());
-                Ok(TranslateResponse {
-                    translated: format!("[Translation of: {}]", request.text),
-                    detected_source_lang: Some("auto".to_string()),
-                })
+                Err(crate::shared::error::AppError::Network(format!("Translation API error: {}", response.status())))
             }
         }
         Err(e) => {
             eprintln!("Translation API request failed: {}", e);
-            Ok(TranslateResponse {
-                translated: format!("[Translation of: {}]", request.text),
-                detected_source_lang: Some("auto".to_string()),
-            })
+            Err(crate::shared::error::AppError::Network(format!("Translation API request failed: {}", e)))
         }
     }
 }

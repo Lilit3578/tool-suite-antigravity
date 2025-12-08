@@ -1,7 +1,12 @@
-use super::{ClipboardHistory, ClipboardItem};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use crate::shared::types::ClipboardHistoryItem;
+use crate::shared::events::AppEvent;
+use crate::shared::emit::emit_event;
+use super::history::ClipboardHistory;
+use std::sync::{Arc, Mutex}; // Keep Mutex as it's used
+use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::{AppHandle, Manager, Emitter};
+use tokio::time::{sleep, Duration}; // Use tokio's Duration and sleep
+use chrono::Local;
 use tauri_plugin_clipboard_manager::ClipboardExt;
 
 /// Clipboard monitor that polls for changes
@@ -80,19 +85,32 @@ impl ClipboardMonitor {
 
                                 // Update last content
                                 *last = Some(current_content.clone());
+                                // We need a clone for string operations
+                                let current_content_string = current_content.clone();
                                 drop(last);
 
                                 // Get the active app (source of the clipboard content)
-                                let source_app = crate::system::automation::macos::get_active_app().ok();
+                                let active_app = crate::system::automation::macos::get_active_app().ok();
                                 
-                                // Add to history
-                                let item = ClipboardItem::new_text(current_content, source_app);
-                                history.add_item(item);
-
-                                // Emit event to frontend
-                                if let Err(e) = app.emit("clipboard-changed", history.get_items()) {
-                                    eprintln!("[ClipboardMonitor] Failed to emit event: {}", e);
-                                }
+                                // Create item and add to history
+                                // Currently only supporting Text via polling loop
+                                let item = crate::shared::types::ClipboardHistoryItem::new_text(
+                                    current_content_string.clone(), 
+                                    active_app.clone()
+                                );
+                                
+                                history.add_item(item.clone());
+                                
+                                // Emit event
+                                emit_event(&app, AppEvent::ClipboardUpdated(item));
+                                
+                                println!("✅ Clipboard updated: \"{}\"", 
+                                    if current_content_string.len() > 20 { 
+                                        format!("{}...", &current_content_string[0..20]) 
+                                    } else { 
+                                        current_content_string.clone() 
+                                    }
+                                );
                             }
                             
                             BASE_POLL_INTERVAL_MS

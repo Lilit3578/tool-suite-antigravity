@@ -31,11 +31,13 @@ pub fn run() {
             }
             
             // Load settings
-            let _settings = shared::settings::AppSettings::load()
-                .unwrap_or_else(|e| {
-                    eprintln!("Failed to load settings: {}", e);
-                    shared::settings::AppSettings::default()
-                });
+            // Load settings
+            let _settings = tauri::async_runtime::block_on(async {
+                shared::settings::AppSettings::load().await
+            }).unwrap_or_else(|e| {
+                eprintln!("Failed to load settings: {}", e);
+                shared::settings::AppSettings::default()
+            });
 
             // Initialize clipboard history and monitor
             let clipboard_history = core::clipboard::history::ClipboardHistory::new();

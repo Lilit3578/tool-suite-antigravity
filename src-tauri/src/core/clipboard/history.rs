@@ -2,85 +2,16 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use chrono::{DateTime, Utc};
 
+use crate::shared::types::{ClipboardHistoryItem, ClipboardItemType};
+
 /// Maximum number of clipboard items to store
 const MAX_HISTORY_SIZE: usize = 5;
 
-/// Type of clipboard content
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum ClipboardItemType {
-    Text,
-    Html,
-    Rtf,
-    Image,
-}
-
-/// A single clipboard history item
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClipboardItem {
-    pub id: String,
-    pub item_type: ClipboardItemType,
-    pub content: String, // For images, this would be base64 or path
-    pub preview: String, // Truncated preview for display
-    pub timestamp: DateTime<Utc>,
-    pub source_app: Option<String>,
-}
-
-impl ClipboardItem {
-    /// Create a new text clipboard item
-    pub fn new_text(content: String, source_app: Option<String>) -> Self {
-        let preview = if content.len() > 100 {
-            format!("{}...", &content[..100])
-        } else {
-            content.clone()
-        };
-
-        Self {
-            id: uuid::Uuid::new_v4().to_string(),
-            item_type: ClipboardItemType::Text,
-            content,
-            preview,
-            timestamp: Utc::now(),
-            source_app,
-        }
-    }
-
-    /// Create a new HTML clipboard item
-    pub fn new_html(content: String, source_app: Option<String>) -> Self {
-        // Strip HTML tags for preview
-        let preview = strip_html_tags(&content);
-        let preview = if preview.len() > 100 {
-            format!("{}...", &preview[..100])
-        } else {
-            preview
-        };
-
-        Self {
-            id: uuid::Uuid::new_v4().to_string(),
-            item_type: ClipboardItemType::Html,
-            content,
-            preview,
-            timestamp: Utc::now(),
-            source_app,
-        }
-    }
-
-    /// Create a new image clipboard item
-    pub fn new_image(content: String, source_app: Option<String>) -> Self {
-        Self {
-            id: uuid::Uuid::new_v4().to_string(),
-            item_type: ClipboardItemType::Image,
-            content,
-            preview: "[Image]".to_string(),
-            timestamp: Utc::now(),
-            source_app,
-        }
-    }
-}
+// ClipboardItem and ClipboardItemType definitions moved to shared/types.rs
 
 /// Clipboard history manager
 pub struct ClipboardHistory {
-    items: Arc<Mutex<Vec<ClipboardItem>>>,
+    items: Arc<Mutex<Vec<ClipboardHistoryItem>>>,
     skip_next_add: Arc<Mutex<bool>>,
 }
 
@@ -94,7 +25,7 @@ impl ClipboardHistory {
     }
 
     /// Add an item to the history
-    pub fn add_item(&self, item: ClipboardItem) {
+    pub fn add_item(&self, item: ClipboardHistoryItem) {
         // Check skip flag (with mutex recovery)
         let mut skip = match self.skip_next_add.lock() {
             Ok(guard) => guard,
@@ -138,7 +69,7 @@ impl ClipboardHistory {
     }
 
     /// Get all clipboard items
-    pub fn get_items(&self) -> Vec<ClipboardItem> {
+    pub fn get_items(&self) -> Vec<ClipboardHistoryItem> {
         match self.items.lock() {
             Ok(guard) => guard.clone(),
             Err(poisoned) => {
@@ -149,7 +80,7 @@ impl ClipboardHistory {
     }
 
     /// Get a specific item by index (0 = most recent)
-    pub fn get_item(&self, index: usize) -> Option<ClipboardItem> {
+    pub fn get_item(&self, index: usize) -> Option<ClipboardHistoryItem> {
         match self.items.lock() {
             Ok(guard) => guard.get(index).cloned(),
             Err(poisoned) => {
@@ -160,7 +91,7 @@ impl ClipboardHistory {
     }
 
     /// Get a specific item by ID
-    pub fn get_item_by_id(&self, id: &str) -> Option<ClipboardItem> {
+    pub fn get_item_by_id(&self, id: &str) -> Option<ClipboardHistoryItem> {
         match self.items.lock() {
             Ok(guard) => guard.iter().find(|item| item.id == id).cloned(),
             Err(poisoned) => {
@@ -222,23 +153,6 @@ impl Default for ClipboardHistory {
     }
 }
 
-/// Simple HTML tag stripper for preview generation
-fn strip_html_tags(html: &str) -> String {
-    let mut result = String::new();
-    let mut in_tag = false;
-
-    for c in html.chars() {
-        match c {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            _ if !in_tag => result.push(c),
-            _ => {}
-        }
-    }
-
-    result.trim().to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -247,8 +161,8 @@ mod tests {
     fn test_add_and_get_items() {
         let history = ClipboardHistory::new();
         
-        let item1 = ClipboardItem::new_text("First item".to_string(), None);
-        let item2 = ClipboardItem::new_text("Second item".to_string(), None);
+        let item1 = ClipboardHistoryItem::new_text("First item".to_string(), None);
+        let item2 = ClipboardHistoryItem::new_text("Second item".to_string(), None);
         
         history.add_item(item1);
         history.add_item(item2);
@@ -264,7 +178,7 @@ mod tests {
         let history = ClipboardHistory::new();
         
         for i in 0..10 {
-            let item = ClipboardItem::new_text(format!("Item {}", i), None);
+            let item = ClipboardHistoryItem::new_text(format!("Item {}", i), None);
             history.add_item(item);
         }
         
@@ -277,8 +191,8 @@ mod tests {
     fn test_skip_duplicate() {
         let history = ClipboardHistory::new();
         
-        let item1 = ClipboardItem::new_text("Same content".to_string(), None);
-        let item2 = ClipboardItem::new_text("Same content".to_string(), None);
+        let item1 = ClipboardHistoryItem::new_text("Same content".to_string(), None);
+        let item2 = ClipboardHistoryItem::new_text("Same content".to_string(), None);
         
         history.add_item(item1);
         history.add_item(item2);
@@ -293,7 +207,7 @@ mod tests {
         
         history.set_skip_next_add(true);
         
-        let item = ClipboardItem::new_text("Should be skipped".to_string(), None);
+        let item = ClipboardHistoryItem::new_text("Should be skipped".to_string(), None);
         history.add_item(item);
         
         let items = history.get_items();
@@ -304,8 +218,8 @@ mod tests {
     fn test_clear() {
         let history = ClipboardHistory::new();
         
-        history.add_item(ClipboardItem::new_text("Item 1".to_string(), None));
-        history.add_item(ClipboardItem::new_text("Item 2".to_string(), None));
+        history.add_item(ClipboardHistoryItem::new_text("Item 1".to_string(), None));
+        history.add_item(ClipboardHistoryItem::new_text("Item 2".to_string(), None));
         
         assert_eq!(history.count(), 2);
         

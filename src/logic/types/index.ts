@@ -1,4 +1,8 @@
 // Type definitions matching Rust backend types
+import {
+    type ClipboardHistoryItem,
+    type ClipboardItemType as GenClipboardItemType
+} from '../../types/bindings';
 
 export interface AppSettings {
     hotkeys: HotkeySettings;
@@ -268,13 +272,6 @@ export interface ExecuteActionResponse {
 }
 
 // Clipboard history types
-export type ClipboardItemType = 'text' | 'html' | 'rtf' | 'image';
+export type ClipboardItemType = GenClipboardItemType;
 
-export interface ClipboardItem {
-    id: string;
-    item_type: ClipboardItemType;
-    content: string;
-    preview: string;
-    timestamp: string;
-    source_app?: string;
-}
+export type ClipboardItem = ClipboardHistoryItem;

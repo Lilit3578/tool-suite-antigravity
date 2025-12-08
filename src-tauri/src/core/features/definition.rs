@@ -5,9 +5,11 @@
 use crate::shared::types::*;
 use super::Feature;
 use std::collections::HashMap;
+use async_trait::async_trait;
 
 pub struct DefinitionFeature;
 
+#[async_trait]
 impl Feature for DefinitionFeature {
     fn id(&self) -> &str {
         "definition"
@@ -53,20 +55,20 @@ impl Feature for DefinitionFeature {
         ]
     }
     
-    fn execute_action(
+    async fn execute_action(
         &self,
         action: &ActionType,
         params: &serde_json::Value,
-    ) -> Result<ExecuteActionResponse, String> {
+    ) -> crate::shared::error::AppResult<ExecuteActionResponse> {
         let text = params.get("text")
             .and_then(|v| v.as_str())
-            .ok_or("Missing 'text' parameter")?;
+            .ok_or(crate::shared::error::AppError::Validation("Missing 'text' parameter".to_string()))?;
         
         // Sanitize input: extract first word, remove punctuation
         let word = sanitize_word(text);
         
         if word.is_empty() {
-            return Err("No valid word found in input".to_string());
+            return Err(crate::shared::error::AppError::Validation("No valid word found in input".to_string()));
         }
         
         let request = LookupDefinitionRequest {
@@ -102,7 +104,7 @@ impl Feature for DefinitionFeature {
                     format!("{} ({}): {}", word, first_def.part_of_speech, first_def.definition)
                 }
             }
-            _ => return Err("Not a definition action".to_string()),
+            _ => return Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
         };
         
         Ok(ExecuteActionResponse {
@@ -140,7 +142,7 @@ fn sanitize_word(text: &str) -> String {
 
 /// Look up word definition using Free Dictionary API
 #[tauri::command]
-pub async fn lookup_definition(request: LookupDefinitionRequest) -> Result<LookupDefinitionResponse, String> {
+pub async fn lookup_definition(request: LookupDefinitionRequest) -> crate::shared::error::AppResult<LookupDefinitionResponse> {
     let client = reqwest::Client::new();
     
     // Free Dictionary API endpoint
@@ -255,23 +257,23 @@ pub async fn lookup_definition(request: LookupDefinitionRequest) -> Result<Looku
                             }
                         }
                         
-                        Err(format!("No definition found for '{}'", request.word))
+                        Err(crate::shared::error::AppError::Validation(format!("No definition found for '{}'", request.word)))
                     }
                     Err(e) => {
                         eprintln!("Failed to parse definition response: {}", e);
-                        Err(format!("Failed to parse definition for '{}'", request.word))
+                        Err(crate::shared::error::AppError::Unknown(format!("Failed to parse definition for '{}': {}", request.word, e)))
                     }
                 }
             } else if response.status().as_u16() == 404 {
-                Err(format!("Word '{}' not found in dictionary", request.word))
+                Err(crate::shared::error::AppError::Validation(format!("Word '{}' not found in dictionary", request.word)))
             } else {
                 eprintln!("Dictionary API returned error: {}", response.status());
-                Err(format!("Dictionary API error for '{}'", request.word))
+                Err(crate::shared::error::AppError::Network(format!("Dictionary API error for '{}'", request.word)))
             }
         }
         Err(e) => {
             eprintln!("Dictionary API request failed: {}", e);
-            Err(format!("Failed to connect to dictionary API"))
+            Err(crate::shared::error::AppError::Network("Failed to connect to dictionary API".to_string()))
         }
     }
 }
