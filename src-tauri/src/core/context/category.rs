@@ -153,70 +153,24 @@ pub fn detect_content_category(text: &str) -> Option<ContextCategory> {
 /// adding a match arm here, not touching detection or frontend logic.
 pub fn get_action_category(action: &ActionType) -> Option<ContextCategory> {
     match action {
-        // Translation actions → Language (NEW + OLD variants)
-        ActionType::Translate(_)  // Phase 1: New structured variant
-        | ActionType::TranslateEn
-        | ActionType::TranslateZh
-        | ActionType::TranslateEs
-        | ActionType::TranslateFr
-        | ActionType::TranslateDe
-        | ActionType::TranslateAr
-        | ActionType::TranslatePt
-        | ActionType::TranslateRu
-        | ActionType::TranslateJa
-        | ActionType::TranslateHi
-        | ActionType::TranslateIt
-        | ActionType::TranslateNl
-        | ActionType::TranslatePl
-        | ActionType::TranslateTr
-        | ActionType::TranslateHy
-        | ActionType::TranslateFa
-        | ActionType::TranslateVi
-        | ActionType::TranslateId
-        | ActionType::TranslateKo
-        | ActionType::TranslateBn
-        | ActionType::TranslateUr
-        | ActionType::TranslateTh
-        | ActionType::TranslateSv
-        | ActionType::TranslateDa
-        | ActionType::TranslateFi
-        | ActionType::TranslateHu
-        // Definition actions (NEW + OLD)
-        | ActionType::DefinitionAction(_)  // Phase 3: New structured variant
-        | ActionType::FindSynonyms
-        | ActionType::FindAntonyms
-        | ActionType::BriefDefinition
-        // Text analysis actions (NEW + OLD)
-        | ActionType::AnalyzeText(_)  // Phase 3: New structured variant
-        | ActionType::CountWords
-        | ActionType::CountChars
-        | ActionType::ReadingTime => Some(ContextCategory::Text),
+        // Translation - NEW structured variant only
+        ActionType::Translate(_) => Some(ContextCategory::Text),
         
-        // Currency conversion actions → Currency (NEW + OLD variants)
-        ActionType::ConvertCurrency(_)  // Phase 2: New structured variant
-        | ActionType::ConvertUsd
-        | ActionType::ConvertEur
-        | ActionType::ConvertGbp
-        | ActionType::ConvertJpy
-        | ActionType::ConvertAud
-        | ActionType::ConvertCad
-        | ActionType::ConvertChf
-        | ActionType::ConvertCny
-        | ActionType::ConvertInr
-        | ActionType::ConvertMxn => Some(ContextCategory::Currency),
+        // Text analysis and definition - NEW structured variants only
+        ActionType::AnalyzeText(_)
+        | ActionType::DefinitionAction(_) => Some(ContextCategory::Text),
         
-        // Generic unit conversion → None (polymorphic, handles all unit categories)
+        // Currency - NEW structured variant only
+        ActionType::ConvertCurrency(_) => Some(ContextCategory::Currency),
+        
+        // Generic unit conversion (already structured)
         ActionType::ConvertUnit { .. } => None,
         
-        // Time conversion (NEW + OLD)
-        ActionType::ConvertTimeAction(_)  // Phase 3: New structured variant
-        | ActionType::ConvertTime(_) => Some(ContextCategory::Time),
+        // Time conversion - NEW structured variant only
+        ActionType::ConvertTimeAction(_) => Some(ContextCategory::Time),
         
-        // System actions (NEW + OLD)
-        ActionType::ClipboardAction(_)  // Phase 3: New structured variant
-        | ActionType::ClearClipboardHistory
-        | ActionType::PauseClipboard
-        | ActionType::ResumeClipboard => Some(ContextCategory::General),
+        // Clipboard - NEW structured variant only
+        ActionType::ClipboardAction(_) => Some(ContextCategory::General),
     }
 }
 

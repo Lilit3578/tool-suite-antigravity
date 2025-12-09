@@ -114,89 +114,37 @@ impl FeatureAsync for TranslatorFeature {
         action: &ActionType,
         params: &serde_json::Value,
     ) -> crate::shared::error::AppResult<ExecuteActionResponse> {
-        // Phase 1: Handle BOTH new and old variants for backward compatibility
+        // Phase 4: Only handle new Translate variant
         let target_lang = match action {
-            // NEW: Structured payload variant
             ActionType::Translate(payload) => payload.target_lang.as_str(),
-            
-            // OLD: Deprecated variants (Phase 4 will remove these)
-            #[allow(deprecated)]
-            ActionType::TranslateEn => "en",
-            #[allow(deprecated)]
-            ActionType::TranslateZh => "zh",
-            #[allow(deprecated)]
-            ActionType::TranslateEs => "es",
-            #[allow(deprecated)]
-            ActionType::TranslateFr => "fr",
-            #[allow(deprecated)]
-            ActionType::TranslateDe => "de",
-            #[allow(deprecated)]
-            ActionType::TranslateAr => "ar",
-            #[allow(deprecated)]
-            ActionType::TranslatePt => "pt",
-            #[allow(deprecated)]
-            ActionType::TranslateRu => "ru",
-            #[allow(deprecated)]
-            ActionType::TranslateJa => "ja",
-            #[allow(deprecated)]
-            ActionType::TranslateHi => "hi",
-            #[allow(deprecated)]
-            ActionType::TranslateIt => "it",
-            #[allow(deprecated)]
-            ActionType::TranslateNl => "nl",
-            #[allow(deprecated)]
-            ActionType::TranslatePl => "pl",
-            #[allow(deprecated)]
-            ActionType::TranslateTr => "tr",
-            #[allow(deprecated)]
-            ActionType::TranslateHy => "hy",
-            #[allow(deprecated)]
-            ActionType::TranslateFa => "fa",
-            #[allow(deprecated)]
-            ActionType::TranslateVi => "vi",
-            #[allow(deprecated)]
-            ActionType::TranslateId => "id",
-            #[allow(deprecated)]
-            ActionType::TranslateKo => "ko",
-            #[allow(deprecated)]
-            ActionType::TranslateBn => "bn",
-            #[allow(deprecated)]
-            ActionType::TranslateUr => "ur",
-            #[allow(deprecated)]
-            ActionType::TranslateTh => "th",
-            #[allow(deprecated)]
-            ActionType::TranslateSv => "sv",
-            #[allow(deprecated)]
-            ActionType::TranslateDa => "da",
-            #[allow(deprecated)]
-            ActionType::TranslateFi => "fi",
-            #[allow(deprecated)]
-            ActionType::TranslateHu => "hu",
-            _ => return Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
+            _ => return Err(crate::shared::error::AppError::Unknown(
+                crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string(),
+            )),
         };
-        
+
         let text = params.get("text")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| crate::shared::error::AppError::Validation("Missing 'text' parameter".to_string()))?;
-            
-        let source_lang = params.get("source_lang")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        
-        let translate_request = TranslateRequest {
+            .unwrap_or("");
+
+        if text.is_empty() {
+            return Err(crate::shared::error::AppError::Unknown(
+                "No text provided for translation".to_string(),
+            ));
+        }
+
+        let request = TranslateRequest {
             text: text.to_string(),
-            source_lang,
+            source_lang: None, // Auto-detect
             target_lang: target_lang.to_string(),
             provider: None,
         };
-        
-        // Execute translation asynchronously
-        let response = translate_text(translate_request).await?;
-        
+
+        let response = translate_text(request).await?;
+
         Ok(ExecuteActionResponse {
             result: response.translated,
             metadata: Some(serde_json::json!({
-                "detected_lang": response.detected_source_lang,
+                "detected_source_lang": response.detected_source_lang,
             })),
         })
     }

@@ -6,7 +6,7 @@ pub mod constants;
 use chrono::{DateTime, Local, TimeZone, Utc, Offset};
 use chrono_tz::Tz;
 use chrono_english::{parse_date_string, Dialect};
-use crate::shared::types::{ConvertTimeRequest, ConvertTimeResponse, TimezoneInfo, ParsedTimeInput, CommandItem, ActionType, ExecuteActionResponse};
+use crate::shared::types::{ConvertTimeRequest, ConvertTimeResponse, TimezoneInfo, ParsedTimeInput, CommandItem, ActionType, TimePayload, ExecuteActionResponse};
 use super::{FeatureSync, FeatureAsync};
 use std::collections::HashMap;
 use regex::Regex;
@@ -152,7 +152,7 @@ impl FeatureAsync for TimeConverterFeature {
         println!("[TimeConverter] 📋 Params: {}", params);
         
         match action {
-            ActionType::ConvertTime(target_timezone) => {
+            ActionType::ConvertTimeAction(payload) => {
                 let text_input = params.get("text")
                     .and_then(|v| v.as_str())
                     .unwrap_or("now");
@@ -166,11 +166,11 @@ impl FeatureAsync for TimeConverterFeature {
                 println!("  parsed time_input: '{}'", parsed.time_input);
                 println!("  parsed source_timezone: {:?}", parsed.source_timezone);
                 println!("  matched_keyword: {:?}", parsed.matched_keyword);
-                println!("  target_timezone: '{}'", target_timezone);
+                println!("  target_timezone: '{}'", payload.target_timezone);
                 
                 let request = ConvertTimeRequest {
                     time_input: parsed.time_input,
-                    target_timezone: target_timezone.clone(),
+                    target_timezone: payload.target_timezone.clone(),
                     source_timezone: parsed.source_timezone,
                     matched_keyword: parsed.matched_keyword,
                 };
@@ -455,13 +455,15 @@ pub fn get_all_timezones() -> Vec<TimezoneInfo> {
 pub fn generate_timezone_commands() -> Vec<CommandItem> {
     constants::ALL_TIMEZONES
         .iter()
-        .map(|(country_label, iana_id, _keywords)| {
-            let formatted_label = format_timezone_label(iana_id, country_label);
+        .map(|(label, iana_id, _keywords)| {
+            let formatted_label = format_timezone_label(iana_id, label);
             CommandItem {
-                id: format!("time_{}", iana_id.replace('/', "_").to_lowercase()),
-                label: format!("Time in {}", formatted_label),
-                description: Some(format!("Convert time to {}", formatted_label)),
-                action_type: Some(ActionType::ConvertTime(iana_id.to_string())),
+                id: format!("convert_time_{}", iana_id.to_lowercase().replace('/', "_")),
+                label: format!("Convert time to {}", formatted_label),
+                description: None,
+                action_type: Some(ActionType::ConvertTimeAction(TimePayload {
+                    target_timezone: iana_id.to_string(),
+                })),
                 widget_type: None,
                 category: None,
             }

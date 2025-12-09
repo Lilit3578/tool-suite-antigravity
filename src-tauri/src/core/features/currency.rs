@@ -93,32 +93,9 @@ impl FeatureAsync for CurrencyFeature {
         println!("!! CURRENCY EXECUTE CALLED with {:?}", action);
         println!("!! CURRENCY PARAMS: {}", params);
 
-        // Phase 2: Handle BOTH new and old variants for backward compatibility
+        // Phase 4: Only handle new ConvertCurrency variant
         let target_currency = match action {
-            // NEW: Structured payload variant
             ActionType::ConvertCurrency(payload) => payload.target_currency.as_str(),
-            
-            // OLD: Deprecated variants (Phase 4 will remove these)
-            #[allow(deprecated)]
-            ActionType::ConvertUsd => "USD",
-            #[allow(deprecated)]
-            ActionType::ConvertEur => "EUR",
-            #[allow(deprecated)]
-            ActionType::ConvertGbp => "GBP",
-            #[allow(deprecated)]
-            ActionType::ConvertJpy => "JPY",
-            #[allow(deprecated)]
-            ActionType::ConvertAud => "AUD",
-            #[allow(deprecated)]
-            ActionType::ConvertCad => "CAD",
-            #[allow(deprecated)]
-            ActionType::ConvertChf => "CHF",
-            #[allow(deprecated)]
-            ActionType::ConvertCny => "CNY",
-            #[allow(deprecated)]
-            ActionType::ConvertInr => "INR",
-            #[allow(deprecated)]
-            ActionType::ConvertMxn => "MXN",
             _ => {
                 println!("[CurrencyFeature] Currency ignoring action: {:?}", action);
                 return Err(crate::shared::error::AppError::Unknown(

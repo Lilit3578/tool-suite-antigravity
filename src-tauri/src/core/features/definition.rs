@@ -27,12 +27,15 @@ impl FeatureSync for DefinitionFeature {
     }
     
     fn action_commands(&self) -> Vec<CommandItem> {
+        use crate::shared::types::{DefinitionPayload, DefinitionAction};
         vec![
             CommandItem {
                 id: "find_synonyms".to_string(),
                 label: "Find Synonyms".to_string(),
                 description: Some("Find synonyms for selected word".to_string()),
-                action_type: Some(ActionType::FindSynonyms),
+                action_type: Some(ActionType::DefinitionAction(DefinitionPayload {
+                    action: DefinitionAction::FindSynonyms,
+                })),
                 widget_type: None,
                 category: None,
             },
@@ -40,7 +43,9 @@ impl FeatureSync for DefinitionFeature {
                 id: "find_antonyms".to_string(),
                 label: "Find Antonyms".to_string(),
                 description: Some("Find antonyms for selected word".to_string()),
-                action_type: Some(ActionType::FindAntonyms),
+                action_type: Some(ActionType::DefinitionAction(DefinitionPayload {
+                    action: DefinitionAction::FindAntonyms,
+                })),
                 widget_type: None,
                 category: None,
             },
@@ -48,7 +53,9 @@ impl FeatureSync for DefinitionFeature {
                 id: "brief_definition".to_string(),
                 label: "Quick Definition".to_string(),
                 description: Some("Get brief definition of selected word".to_string()),
-                action_type: Some(ActionType::BriefDefinition),
+                action_type: Some(ActionType::DefinitionAction(DefinitionPayload {
+                    action: DefinitionAction::BriefDefinition,
+                })),
                 widget_type: None,
                 category: None,
             },
@@ -99,22 +106,28 @@ impl FeatureAsync for DefinitionFeature {
         })?;
         
         // Format response based on action type
-        let result = match action {
-            ActionType::FindSynonyms => {
+        use crate::shared::types::DefinitionAction;
+        let def_action = match action {
+            ActionType::DefinitionAction(payload) => &payload.action,
+            _ => return Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
+        };
+        
+        let result = match def_action {
+            DefinitionAction::FindSynonyms => {
                 if response.synonyms.is_empty() {
                     format!("No synonyms found for '{}'", word)
                 } else {
                     format!("Synonyms for '{}': {}", word, response.synonyms.join(", "))
                 }
             }
-            ActionType::FindAntonyms => {
+            DefinitionAction::FindAntonyms => {
                 if response.antonyms.is_empty() {
                     format!("No antonyms found for '{}'", word)
                 } else {
                     format!("Antonyms for '{}': {}", word, response.antonyms.join(", "))
                 }
             }
-            ActionType::BriefDefinition => {
+            DefinitionAction::BriefDefinition => {
                 if response.definitions.is_empty() {
                     format!("No definition found for '{}'", word)
                 } else {
@@ -122,7 +135,6 @@ impl FeatureAsync for DefinitionFeature {
                     format!("{} ({}): {}", word, first_def.part_of_speech, first_def.definition)
                 }
             }
-            _ => return Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
         };
         
         Ok(ExecuteActionResponse {

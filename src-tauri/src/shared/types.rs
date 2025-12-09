@@ -107,140 +107,32 @@ pub struct LogRequest {
 }
 
 
-// Action types for command palette and widget actions
-// Using adjacently tagged serialization for frontend compatibility
+// Action types for command palette and widgets
+/// Phase 4: Production-ready - All variants use structured payloads
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "type", content = "payload")]
 #[ts(export, export_to = "../../src/types/bindings.ts")]
 pub enum ActionType {
-    // ===== NEW: Intent-based variants (Phase 1) =====
-    /// Handles ALL translations with a single variant
-    /// Replaces: TranslateEn, TranslateZh, TranslateEs, etc.
+    // Translation actions - 26 languages consolidated into 1 variant
     Translate(TranslatePayload),
     
-    // ===== NEW: Phase 2 =====
-    /// Handles ALL currency conversions with a single variant
-    /// Replaces: ConvertUsd, ConvertEur, ConvertGbp, etc.
+    // Currency conversion - 10 currencies consolidated into 1 variant
     ConvertCurrency(CurrencyPayload),
     
-    // ===== OLD: Keep temporarily for backward compatibility =====
-    // Translation actions - 26 languages (to be removed in Phase 4)
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateEn,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateZh,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateEs,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateFr,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateDe,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateAr,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslatePt,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateRu,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateJa,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateHi,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateIt,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateNl,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslatePl,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateTr,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateHy,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateFa,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateVi,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateId,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateKo,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateBn,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateUr,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateTh,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateSv,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateDa,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateFi,
-    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
-    TranslateHu,
-    
-    // Currency conversion actions - 10 currencies (to be removed in Phase 4)
-    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
-    ConvertUsd,
-    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
-    ConvertEur,
-    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
-    ConvertGbp,
-    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
-    ConvertJpy,
-    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
-    ConvertAud,
-    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
-    ConvertCad,
-    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
-    ConvertChf,
-    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
-    ConvertCny,
-    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
-    ConvertInr,
-    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
-    ConvertMxn,
-    
-    // ===== NEW: Phase 3 =====
-    /// Time conversion with structured payload
+    // Time conversion with structured payload
     ConvertTimeAction(TimePayload),
-    /// Text analysis actions (word count, char count, reading time)
+    
+    // Text analysis actions (word count, char count, reading time)
     AnalyzeText(TextAnalysisPayload),
-    /// Clipboard management actions
+    
+    // Clipboard management actions
     ClipboardAction(ClipboardPayload),
-    /// Definition lookup actions (synonyms, antonyms, definitions)
+    
+    // Definition lookup actions (synonyms, antonyms, definitions)
     DefinitionAction(DefinitionPayload),
     
-    // ===== OLD: Deprecated variants (Phase 3) =====
-    // Generic unit conversion action with payload (already structured - keep as is)
+    // Generic unit conversion (already structured)
     ConvertUnit { target: String },
-    
-    // Time zone conversion - polymorphic variant carrying timezone ID
-    #[deprecated(note = "Use ConvertTimeAction(TimePayload) instead")]
-    ConvertTime(String),
-    
-    // Definition lookup actions
-    #[deprecated(note = "Use DefinitionAction(DefinitionPayload) instead")]
-    FindSynonyms,
-    #[deprecated(note = "Use DefinitionAction(DefinitionPayload) instead")]
-    FindAntonyms,
-    #[deprecated(note = "Use DefinitionAction(DefinitionPayload) instead")]
-    BriefDefinition,
-    
-    // Clipboard actions
-    #[deprecated(note = "Use ClipboardAction(ClipboardPayload) instead")]
-    ClearClipboardHistory,
-    #[deprecated(note = "Use ClipboardAction(ClipboardPayload) instead")]
-    PauseClipboard,
-    #[deprecated(note = "Use ClipboardAction(ClipboardPayload) instead")]
-    ResumeClipboard,
-
-    // Text analysis actions
-    #[deprecated(note = "Use AnalyzeText(TextAnalysisPayload) instead")]
-    CountWords,
-    #[deprecated(note = "Use AnalyzeText(TextAnalysisPayload) instead")]
-    CountChars,
-    #[deprecated(note = "Use AnalyzeText(TextAnalysisPayload) instead")]
-    ReadingTime,
 }
 
 // ===== NEW: Payload Structures (Phase 1) =====

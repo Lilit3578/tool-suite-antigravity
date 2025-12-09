@@ -99,71 +99,14 @@ export interface LogRequest {
 // IMPORTANT: Must match Rust's adjacently tagged serialization format
 // Backend uses: #[serde(tag = "type", content = "payload")]
 export type ActionType =
-    // ===== NEW: Phase 1 & 2 - Structured payload variants =====
+    // Phase 4: Production-ready - Only structured payload variants
     | { type: 'Translate'; payload: { target_lang: string; source_lang?: string } }
     | { type: 'ConvertCurrency'; payload: { target_currency: string } }
-
-    // ===== NEW: Phase 3 - Additional structured variants =====
     | { type: 'ConvertTimeAction'; payload: { target_timezone: string } }
     | { type: 'AnalyzeText'; payload: { action: 'CountWords' | 'CountChars' | 'ReadingTime' } }
     | { type: 'ClipboardAction'; payload: { action: 'ClearHistory' | 'Pause' | 'Resume' } }
     | { type: 'DefinitionAction'; payload: { action: 'FindSynonyms' | 'FindAntonyms' | 'BriefDefinition' } }
-
-    // ===== OLD: Deprecated variants (kept for backward compatibility) =====
-    // Translation actions (26) - simple variants (no payload)
-    | { type: 'TranslateEn' }
-    | { type: 'TranslateZh' }
-    | { type: 'TranslateEs' }
-    | { type: 'TranslateFr' }
-    | { type: 'TranslateDe' }
-    | { type: 'TranslateAr' }
-    | { type: 'TranslatePt' }
-    | { type: 'TranslateRu' }
-    | { type: 'TranslateJa' }
-    | { type: 'TranslateHi' }
-    | { type: 'TranslateIt' }
-    | { type: 'TranslateNl' }
-    | { type: 'TranslatePl' }
-    | { type: 'TranslateTr' }
-    | { type: 'TranslateHy' }
-    | { type: 'TranslateFa' }
-    | { type: 'TranslateVi' }
-    | { type: 'TranslateId' }
-    | { type: 'TranslateKo' }
-    | { type: 'TranslateBn' }
-    | { type: 'TranslateUr' }
-    | { type: 'TranslateTh' }
-    | { type: 'TranslateSv' }
-    | { type: 'TranslateDa' }
-    | { type: 'TranslateFi' }
-    | { type: 'TranslateHu' }
-    // Currency conversion actions (10)
-    | { type: 'ConvertUsd' }
-    | { type: 'ConvertEur' }
-    | { type: 'ConvertGbp' }
-    | { type: 'ConvertJpy' }
-    | { type: 'ConvertAud' }
-    | { type: 'ConvertCad' }
-    | { type: 'ConvertChf' }
-    | { type: 'ConvertCny' }
-    | { type: 'ConvertInr' }
-    | { type: 'ConvertMxn' }
-    // Generic unit conversion - with payload
-    | { type: 'ConvertUnit'; payload: { target: string } }
-    // Time zone conversion - with payload
-    | { type: 'ConvertTime'; payload: string }
-    // Definition actions
-    | { type: 'FindSynonyms' }
-    | { type: 'FindAntonyms' }
-    | { type: 'BriefDefinition' }
-    // Clipboard actions
-    | { type: 'ClearClipboardHistory' }
-    | { type: 'PauseClipboard' }
-    | { type: 'ResumeClipboard' }
-    // Text analysis actions
-    | { type: 'CountWords' }
-    | { type: 'CountChars' }
-    | { type: 'ReadingTime' };
+    | { type: 'ConvertUnit'; payload: { target: string } };
 
 export interface ConvertTimeRequest {
     time_input: string;

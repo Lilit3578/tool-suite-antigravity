@@ -26,12 +26,15 @@ impl super::FeatureSync for TextAnalyserFeature {
     }
 
     fn action_commands(&self) -> Vec<CommandItem> {
+        use crate::shared::types::{TextAnalysisPayload, TextAnalysisAction};
         vec![
             CommandItem {
                 id: "count_words".to_string(),
                 label: "Count Words".to_string(),
                 description: Some("Count words in selected text".to_string()),
-                action_type: Some(ActionType::CountWords),
+                action_type: Some(ActionType::AnalyzeText(TextAnalysisPayload {
+                    action: TextAnalysisAction::CountWords,
+                })),
                 widget_type: None,
                 category: Some(crate::core::context::category::ContextCategory::Text),
             },
@@ -39,7 +42,9 @@ impl super::FeatureSync for TextAnalyserFeature {
                 id: "count_chars".to_string(),
                 label: "Count Characters".to_string(),
                 description: Some("Count characters (with/without spaces)".to_string()),
-                action_type: Some(ActionType::CountChars),
+                action_type: Some(ActionType::AnalyzeText(TextAnalysisPayload {
+                    action: TextAnalysisAction::CountChars,
+                })),
                 widget_type: None,
                 category: Some(crate::core::context::category::ContextCategory::Text),
             },
@@ -47,7 +52,9 @@ impl super::FeatureSync for TextAnalyserFeature {
                 id: "reading_time".to_string(),
                 label: "Reading Time".to_string(),
                 description: Some("Estimate reading time".to_string()),
-                action_type: Some(ActionType::ReadingTime),
+                action_type: Some(ActionType::AnalyzeText(TextAnalysisPayload {
+                    action: TextAnalysisAction::ReadingTime,
+                })),
                 widget_type: None,
                 category: Some(crate::core::context::category::ContextCategory::Text),
             },
@@ -68,6 +75,8 @@ impl super::FeatureSync for TextAnalyserFeature {
 #[async_trait]
 impl super::FeatureAsync for TextAnalyserFeature {
     async fn execute_action(&self, action: &ActionType, params: &serde_json::Value) -> crate::shared::error::AppResult<crate::shared::types::ExecuteActionResponse> {
+        use crate::shared::types::TextAnalysisAction;
+        
         let text = params.get("text")
             .and_then(|t| t.as_str())
             .ok_or_else(|| crate::shared::error::AppError::Validation("Missing 'text' parameter".to_string()))?
@@ -75,10 +84,15 @@ impl super::FeatureAsync for TextAnalyserFeature {
 
         let analysis = perform_analysis(&text);
 
-        let result_text = match action {
-            ActionType::CountWords => format!("{} words", analysis.word_count),
-            ActionType::CountChars => format!("{} chars ({} without spaces)", analysis.char_count, analysis.char_count_no_spaces),
-            ActionType::ReadingTime => {
+        let analysis_action = match action {
+            ActionType::AnalyzeText(payload) => &payload.action,
+            _ => return Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
+        };
+
+        let result_text = match analysis_action {
+            TextAnalysisAction::CountWords => format!("{} words", analysis.word_count),
+            TextAnalysisAction::CountChars => format!("{} chars ({} without spaces)", analysis.char_count, analysis.char_count_no_spaces),
+            TextAnalysisAction::ReadingTime => {
                 let mins = (analysis.reading_time_sec / 60.0).floor();
                 let secs = (analysis.reading_time_sec % 60.0).round();
                 if mins > 0.0 {
@@ -87,7 +101,6 @@ impl super::FeatureAsync for TextAnalyserFeature {
                     format!("~{} sec", secs)
                 }
             },
-            _ => return Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
         };
 
         Ok(crate::shared::types::ExecuteActionResponse {
