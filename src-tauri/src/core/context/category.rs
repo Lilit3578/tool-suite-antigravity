@@ -199,59 +199,10 @@ pub fn get_action_category(action: &ActionType) -> Option<ContextCategory> {
         | ActionType::ConvertInr
         | ActionType::ConvertMxn => Some(ContextCategory::Currency),
         
-        // Length conversion actions → Length
-        ActionType::ConvertToMM
-        | ActionType::ConvertToCM
-        | ActionType::ConvertToM
-        | ActionType::ConvertToKM
-        | ActionType::ConvertToIN
-        | ActionType::ConvertToFT
-        | ActionType::ConvertToYD
-        | ActionType::ConvertToMI => Some(ContextCategory::Length),
+        // Generic unit conversion → None (polymorphic, handles all unit categories)
+        ActionType::ConvertUnit { .. } => None,
         
-        // Mass conversion actions → Mass
-        ActionType::ConvertToMG
-        | ActionType::ConvertToG
-        | ActionType::ConvertToKG
-        | ActionType::ConvertToOZ
-        | ActionType::ConvertToLB => Some(ContextCategory::Mass),
-        
-        // Volume conversion actions → Volume
-        ActionType::ConvertToML
-        | ActionType::ConvertToL
-        | ActionType::ConvertToFlOz
-        | ActionType::ConvertToCup
-        | ActionType::ConvertToPint
-        | ActionType::ConvertToQuart
-        | ActionType::ConvertToGal => Some(ContextCategory::Volume),
-        
-        // Temperature conversion actions → Temperature
-        ActionType::ConvertToC
-        | ActionType::ConvertToF
-        | ActionType::ConvertToK => Some(ContextCategory::Temperature),
-        
-        // Speed conversion actions → Speed
-        ActionType::ConvertToMS
-        | ActionType::ConvertToKMH
-        | ActionType::ConvertToMPH
-        | ActionType::ConvertToKnot => Some(ContextCategory::Speed),
-        
-        // Cross-category conversions (Volume to Mass) → Mass
-        ActionType::ConvertVolToG
-        | ActionType::ConvertVolToKG
-        | ActionType::ConvertVolToOZ
-        | ActionType::ConvertVolToLB => Some(ContextCategory::Mass),
-        
-        // Cross-category conversions (Mass to Volume) → Volume
-        ActionType::ConvertMassToML
-        | ActionType::ConvertMassToL
-        | ActionType::ConvertMassToFlOz
-        | ActionType::ConvertMassToCup
-        | ActionType::ConvertMassToPint
-        | ActionType::ConvertMassToQuart
-        | ActionType::ConvertMassToGal => Some(ContextCategory::Volume),
-        
-        // Time zone conversion → Time
+        // Time conversion
         ActionType::ConvertTime(_) => Some(ContextCategory::Time),
         
         // System actions

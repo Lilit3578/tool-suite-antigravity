@@ -149,7 +149,7 @@ impl FeatureAsync for CurrencyFeature {
         println!("[CurrencyFeature] DEBUG: convert_request = amount={}, from={}, to={}", convert_request.amount, convert_request.from, convert_request.to);
         
         // Execute conversion asynchronously
-        let service = CurrencyService::global()
+        let service = CurrencyService::global().await
             .map_err(|e| AppError::Unknown(e.to_string()))?;
         println!("[CurrencyFeature] DEBUG: CurrencyService acquired");
 
@@ -176,7 +176,7 @@ impl FeatureAsync for CurrencyFeature {
 pub async fn convert_currency(
     request: ConvertCurrencyRequest,
 ) -> crate::shared::error::AppResult<currency_types::ConvertCurrencyResponse> {
-    let service = CurrencyService::global()
+    let service = CurrencyService::global().await
         .map_err(|e| AppError::Unknown(e.to_string()))?;
 
     // Try strict parse first; fallback to fuzzy parsing on failure

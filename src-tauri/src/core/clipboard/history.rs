@@ -6,114 +6,135 @@ use std::path::PathBuf;
 use directories::ProjectDirs;
 
 use crate::shared::types::{ClipboardHistoryItem, ClipboardItemType};
-use crate::shared::errors::{CommandError, CommandResult};
+use crate::shared::error::{AppError, AppResult};
 
 /// Maximum number of clipboard items to store
 const MAX_HISTORY_SIZE: usize = 5;
 
-/// Redb table definition for clipboard history
-/// Key: timestamp (u64), Value: serialized ClipboardHistoryItem
-const CLIPBOARD_TABLE: TableDefinition<u64, &str> = TableDefinition::new("clipboard_history");
+/// Redb table definition for clipboard history (v2 using CBOR)
+/// Key: timestamp (u64), Value: serialized ClipboardHistoryItem (CBOR bytes)
+const CLIPBOARD_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("clipboard_history_v2");
 
 // ClipboardItem and ClipboardItemType definitions moved to shared/types.rs
 
 /// Storage trait for clipboard history persistence
 trait Storage: Send + Sync {
-    fn save_item(&self, item: &ClipboardHistoryItem) -> CommandResult<()>;
-    fn load_items(&self, limit: usize) -> CommandResult<Vec<ClipboardHistoryItem>>;
-    fn clear_all(&self) -> CommandResult<()>;
-    fn get_item_by_id(&self, id: &str) -> CommandResult<Option<ClipboardHistoryItem>>;
+    fn save_item(&self, item: &ClipboardHistoryItem) -> AppResult<()>;
+    fn load_items(&self, limit: usize) -> AppResult<Vec<ClipboardHistoryItem>>;
+    fn clear_all(&self) -> AppResult<()>;
+    fn get_item_by_id(&self, id: &str) -> AppResult<Option<ClipboardHistoryItem>>;
 }
+
+use crate::core::security::encryption::EncryptionManager;
 
 /// Redb-based storage implementation
 struct RedbStorage {
-    db: Arc<Mutex<Database>>,
+    db: Arc<Database>,
+    encryption: Arc<EncryptionManager>,
 }
 
 impl RedbStorage {
-    fn new() -> CommandResult<Self> {
+    fn new() -> AppResult<Self> {
         let proj_dirs = ProjectDirs::from("com", "antigravity", "productivity-widgets")
-            .ok_or_else(|| CommandError::SystemIO("Failed to get project directories".to_string()))?;
+            .ok_or_else(|| AppError::System("Failed to get project directories".to_string()))?;
         
         let data_dir = proj_dirs.data_dir();
         std::fs::create_dir_all(data_dir)
-            .map_err(|e| CommandError::SystemIO(format!("Failed to create data directory: {}", e)))?;
+            .map_err(|e| AppError::Io(format!("Failed to create data directory: {}", e)))?;
         
         let db_path = data_dir.join("clipboard_history.redb");
         let db = Database::create(db_path)
-            .map_err(|e| CommandError::SystemIO(format!("Failed to create database: {}", e)))?;
+            .map_err(|e| AppError::Io(format!("Failed to create database: {}", e)))?;
         
         // Initialize table
         {
             let write_txn = db.begin_write()
-                .map_err(|e| CommandError::SystemIO(format!("Failed to begin write transaction: {}", e)))?;
+                .map_err(|e| AppError::Io(format!("Failed to begin write transaction: {}", e)))?;
             {
                 let _table = write_txn.open_table(CLIPBOARD_TABLE)
-                    .map_err(|e| CommandError::SystemIO(format!("Failed to open table: {}", e)))?;
+                    .map_err(|e| AppError::Io(format!("Failed to open table: {}", e)))?;
             }
             write_txn.commit()
-                .map_err(|e| CommandError::SystemIO(format!("Failed to commit transaction: {}", e)))?;
+                .map_err(|e| AppError::Io(format!("Failed to commit transaction: {}", e)))?;
         }
+
+        let encryption = Arc::new(EncryptionManager::new()?);
         
         Ok(Self {
-            db: Arc::new(Mutex::new(db)),
+            db: Arc::new(db),
+            encryption,
         })
     }
 }
 
 impl Storage for RedbStorage {
-    fn save_item(&self, item: &ClipboardHistoryItem) -> CommandResult<()> {
-        let db = self.db.lock()
-            .map_err(|e| CommandError::SystemIO(format!("Mutex poisoned: {}", e)))?;
-        
-        let write_txn = db.begin_write()
-            .map_err(|e| CommandError::SystemIO(format!("Failed to begin write: {}", e)))?;
+    fn save_item(&self, item: &ClipboardHistoryItem) -> AppResult<()> {
+        let write_txn = self.db.begin_write()
+            .map_err(|e| AppError::Io(format!("Failed to begin write: {}", e)))?;
         
         {
             let mut table = write_txn.open_table(CLIPBOARD_TABLE)
-                .map_err(|e| CommandError::SystemIO(format!("Failed to open table: {}", e)))?;
+                .map_err(|e| AppError::Io(format!("Failed to open table: {}", e)))?;
             
-            // Use timestamp as key (convert DateTime to milliseconds since epoch)
-            // item.timestamp is already a DateTime<Utc>, convert to milliseconds
             let timestamp = item.timestamp.timestamp_millis() as u64;
             
-            let serialized = serde_json::to_string(item)
-                .map_err(|e| CommandError::InvalidInput(format!("Serialization error: {}", e)))?;
+            let mut serialized = Vec::new();
+            ciborium::into_writer(item, &mut serialized)
+                .map_err(|e| AppError::Validation(format!("Serialization error: {}", e)))?;
             
-            table.insert(timestamp, serialized.as_str())
-                .map_err(|e| CommandError::SystemIO(format!("Failed to insert: {}", e)))?;
+            // Encrypt data
+            let encrypted = self.encryption.encrypt(&serialized)?;
+
+            table.insert(timestamp, encrypted.as_slice())
+                .map_err(|e| AppError::Io(format!("Failed to insert: {}", e)))?;
         }
         
         write_txn.commit()
-            .map_err(|e| CommandError::SystemIO(format!("Failed to commit: {}", e)))?;
+            .map_err(|e| AppError::Io(format!("Failed to commit: {}", e)))?;
         
         Ok(())
     }
     
-    fn load_items(&self, limit: usize) -> CommandResult<Vec<ClipboardHistoryItem>> {
-        let db = self.db.lock()
-            .map_err(|e| CommandError::SystemIO(format!("Mutex poisoned: {}", e)))?;
-        
-        let read_txn = db.begin_read()
-            .map_err(|e| CommandError::SystemIO(format!("Failed to begin read: {}", e)))?;
+    fn load_items(&self, limit: usize) -> AppResult<Vec<ClipboardHistoryItem>> {
+        let read_txn = self.db.begin_read()
+            .map_err(|e| AppError::Io(format!("Failed to begin read: {}", e)))?;
         
         let table = read_txn.open_table(CLIPBOARD_TABLE)
-            .map_err(|e| CommandError::SystemIO(format!("Failed to open table: {}", e)))?;
+            .map_err(|e| AppError::Io(format!("Failed to open table: {}", e)))?;
         
         let mut items = Vec::new();
+        // Since redb iteration is synchronous, we collect identifiers first if we want to reverse, 
+        // or just iterate reversely if supported. Redb iterators are double-ended.
+        // We'll proceed with collecting.
         let iter = table.iter()
-            .map_err(|e| CommandError::SystemIO(format!("Failed to create iterator: {}", e)))?;
+            .map_err(|e| AppError::Io(format!("Failed to create iterator: {}", e)))?;
         
-        // Iterate in reverse (newest first) and take limit
         let mut entries: Vec<_> = iter.collect();
-        entries.reverse();
+        entries.reverse(); // Newest first
         
         for entry in entries.into_iter().take(limit) {
             let (_, value) = entry
-                .map_err(|e| CommandError::SystemIO(format!("Failed to read entry: {}", e)))?;
+                .map_err(|e| AppError::Io(format!("Failed to read entry: {}", e)))?;
             
-            let item: ClipboardHistoryItem = serde_json::from_str(value.value())
-                .map_err(|e| CommandError::InvalidInput(format!("Deserialization error: {}", e)))?;
+            let raw_bytes = value.value();
+            
+            // Try decrypting
+            let item: ClipboardHistoryItem = match self.encryption.decrypt(raw_bytes) {
+                Ok(plaintext) => {
+                    ciborium::from_reader(plaintext.as_slice())
+                        .map_err(|e| AppError::Validation(format!("Deserialization error (decrypted): {}", e)))?
+                },
+                Err(_) => {
+                    // Fallback: Try decoding as unencrypted (migration path)
+                    // If it matches valid CBOR/JSON, use it.
+                    // Note: Since we switched table name to "clipboard_history_v2", 
+                    // this path is only needed if we switch ON encryption for an existing v2 table.
+                    // Assuming empty v2 table initially, this isn't strictly necessary, 
+                    // but good for safety if we later change specific encryption params.
+                    ciborium::from_reader(raw_bytes)
+                        .map_err(|e| AppError::Validation(format!("Deserialization error (fallback): {}", e)))?
+                }
+            };
             
             items.push(item);
         }
@@ -121,43 +142,43 @@ impl Storage for RedbStorage {
         Ok(items)
     }
     
-    fn clear_all(&self) -> CommandResult<()> {
-        let db = self.db.lock()
-            .map_err(|e| CommandError::SystemIO(format!("Mutex poisoned: {}", e)))?;
-        
-        let write_txn = db.begin_write()
-            .map_err(|e| CommandError::SystemIO(format!("Failed to begin write: {}", e)))?;
+    fn clear_all(&self) -> AppResult<()> {
+        let write_txn = self.db.begin_write()
+            .map_err(|e| AppError::Io(format!("Failed to begin write: {}", e)))?;
         
         {
             let mut table = write_txn.open_table(CLIPBOARD_TABLE)
-                .map_err(|e| CommandError::SystemIO(format!("Failed to open table: {}", e)))?;
+                .map_err(|e| AppError::Io(format!("Failed to open table: {}", e)))?;
             
-            // redb doesn't have drain(), so we iterate and remove all keys
             let iter = table.iter()
-                .map_err(|e| CommandError::SystemIO(format!("Failed to iterate: {}", e)))?;
+                .map_err(|e| AppError::Io(format!("Failed to iterate: {}", e)))?;
             
+            // Collect keys
             let mut keys = Vec::new();
             for entry_result in iter {
                 let entry = entry_result
-                    .map_err(|e| CommandError::SystemIO(format!("Failed to read entry: {}", e)))?;
+                    .map_err(|e| AppError::Io(format!("Failed to read entry: {}", e)))?;
                 let (key, _) = entry;
                 keys.push(key.value());
             }
             
             for key in keys {
                 table.remove(key)
-                    .map_err(|e| CommandError::SystemIO(format!("Failed to remove key: {}", e)))?;
+                .map_err(|e| AppError::Io(format!("Failed to remove key: {}", e)))?;
             }
         }
         
         write_txn.commit()
-            .map_err(|e| CommandError::SystemIO(format!("Failed to commit: {}", e)))?;
+            .map_err(|e| AppError::Io(format!("Failed to commit: {}", e)))?;
         
         Ok(())
     }
     
-    fn get_item_by_id(&self, id: &str) -> CommandResult<Option<ClipboardHistoryItem>> {
-        let items = self.load_items(MAX_HISTORY_SIZE * 10)?; // Load more to search
+    fn get_item_by_id(&self, id: &str) -> AppResult<Option<ClipboardHistoryItem>> {
+        // Optimization: iterate finding match instead of loading all?
+        // Encrypted values means we MUST load and decrypt to check content if ID was inside content.
+        // But ID is part of the struct. We have to decrypt everything to find ID.
+        let items = self.load_items(MAX_HISTORY_SIZE * 20)?; 
         Ok(items.into_iter().find(|item| item.id == id))
     }
 }
@@ -220,47 +241,35 @@ impl ClipboardHistory {
         }
 
         // Enforce MAX_HISTORY_SIZE by loading all and keeping only recent ones
-        // Note: This is a simple approach; for production, implement proper cleanup
         let _ = self.storage.load_items(MAX_HISTORY_SIZE * 2);
 
         println!("[ClipboardHistory] Added item to database: {}", item.id);
     }
 
     /// Get all clipboard items (from database)
-    pub fn get_items(&self) -> Vec<ClipboardHistoryItem> {
+    pub fn get_items(&self) -> AppResult<Vec<ClipboardHistoryItem>> {
         self.storage.load_items(MAX_HISTORY_SIZE)
-            .unwrap_or_else(|e| {
-                eprintln!("[ClipboardHistory] Failed to load items: {}", e);
-                Vec::new()
-            })
     }
 
     /// Get a specific item by index (0 = most recent)
-    pub fn get_item(&self, index: usize) -> Option<ClipboardHistoryItem> {
-        self.get_items().get(index).cloned()
+    pub fn get_item(&self, index: usize) -> AppResult<Option<ClipboardHistoryItem>> {
+        let items = self.get_items()?;
+        Ok(items.get(index).cloned())
     }
 
     /// Get a specific item by ID
-    pub fn get_item_by_id(&self, id: &str) -> Option<ClipboardHistoryItem> {
+    pub fn get_item_by_id(&self, id: &str) -> AppResult<Option<ClipboardHistoryItem>> {
         self.storage.get_item_by_id(id)
-            .unwrap_or_else(|e| {
-                eprintln!("[ClipboardHistory] Failed to get item by ID: {}", e);
-                None
-            })
     }
 
     /// Clear all history (from database)
-    pub fn clear(&self) {
-        if let Err(e) = self.storage.clear_all() {
-            eprintln!("[ClipboardHistory] Failed to clear database: {}", e);
-        } else {
-            println!("[ClipboardHistory] Cleared all items from database");
-        }
+    pub fn clear(&self) -> AppResult<()> {
+        self.storage.clear_all()
     }
 
     /// Get the count of items
     pub fn count(&self) -> usize {
-        self.get_items().len()
+        self.get_items().map(|v| v.len()).unwrap_or(0)
     }
 
     /// Set the skip_next_add flag (used for auto-paste to prevent re-adding)
@@ -299,9 +308,9 @@ impl InMemoryStorage {
 }
 
 impl Storage for InMemoryStorage {
-    fn save_item(&self, item: &ClipboardHistoryItem) -> CommandResult<()> {
+    fn save_item(&self, item: &ClipboardHistoryItem) -> AppResult<()> {
         let mut items = self.items.lock()
-            .map_err(|e| CommandError::SystemIO(format!("Mutex poisoned: {}", e)))?;
+            .map_err(|e| AppError::Io(format!("Mutex poisoned: {}", e)))?;
         items.insert(0, item.clone());
         if items.len() > MAX_HISTORY_SIZE {
             items.truncate(MAX_HISTORY_SIZE);
@@ -309,22 +318,22 @@ impl Storage for InMemoryStorage {
         Ok(())
     }
     
-    fn load_items(&self, limit: usize) -> CommandResult<Vec<ClipboardHistoryItem>> {
+    fn load_items(&self, limit: usize) -> AppResult<Vec<ClipboardHistoryItem>> {
         let items = self.items.lock()
-            .map_err(|e| CommandError::SystemIO(format!("Mutex poisoned: {}", e)))?;
+            .map_err(|e| AppError::Io(format!("Mutex poisoned: {}", e)))?;
         Ok(items.iter().take(limit).cloned().collect())
     }
     
-    fn clear_all(&self) -> CommandResult<()> {
+    fn clear_all(&self) -> AppResult<()> {
         let mut items = self.items.lock()
-            .map_err(|e| CommandError::SystemIO(format!("Mutex poisoned: {}", e)))?;
+            .map_err(|e| AppError::Io(format!("Mutex poisoned: {}", e)))?;
         items.clear();
         Ok(())
     }
     
-    fn get_item_by_id(&self, id: &str) -> CommandResult<Option<ClipboardHistoryItem>> {
+    fn get_item_by_id(&self, id: &str) -> AppResult<Option<ClipboardHistoryItem>> {
         let items = self.items.lock()
-            .map_err(|e| CommandError::SystemIO(format!("Mutex poisoned: {}", e)))?;
+            .map_err(|e| AppError::Io(format!("Mutex poisoned: {}", e)))?;
         Ok(items.iter().find(|item| item.id == id).cloned())
     }
 }

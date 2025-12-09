@@ -68,8 +68,26 @@ export interface ConvertUnitsRequest {
 
 export interface ConvertUnitsResponse {
     result: number;
+    formatted_result: string;
     from_unit: string;
     to_unit: string;
+}
+
+// New types for unit converter registry
+export interface ParseUnitResponse {
+    amount: number;
+    unit: string;
+    category: string;
+}
+
+export interface GetUnitsResponse {
+    units: UnitDTO[];
+}
+
+export interface UnitDTO {
+    id: string;
+    label: string;
+    category: string;
 }
 
 export interface LogRequest {
@@ -78,101 +96,63 @@ export interface LogRequest {
 }
 
 // New types for unified command palette
+// IMPORTANT: Must match Rust's adjacently tagged serialization format
+// Backend uses: #[serde(tag = "type", content = "payload")]
 export type ActionType =
-    // Translation actions (26)
-    | 'translate_en'
-    | 'translate_zh'
-    | 'translate_es'
-    | 'translate_fr'
-    | 'translate_de'
-    | 'translate_ar'
-    | 'translate_pt'
-    | 'translate_ru'
-    | 'translate_ja'
-    | 'translate_hi'
-    | 'translate_it'
-    | 'translate_nl'
-    | 'translate_pl'
-    | 'translate_tr'
-    | 'translate_hy'
-    | 'translate_fa'
-    | 'translate_vi'
-    | 'translate_id'
-    | 'translate_ko'
-    | 'translate_bn'
-    | 'translate_ur'
-    | 'translate_th'
-    | 'translate_sv'
-    | 'translate_da'
-    | 'translate_fi'
-    | 'translate_hu'
+    // Translation actions (26) - simple variants (no payload)
+    | { type: 'TranslateEn' }
+    | { type: 'TranslateZh' }
+    | { type: 'TranslateEs' }
+    | { type: 'TranslateFr' }
+    | { type: 'TranslateDe' }
+    | { type: 'TranslateAr' }
+    | { type: 'TranslatePt' }
+    | { type: 'TranslateRu' }
+    | { type: 'TranslateJa' }
+    | { type: 'TranslateHi' }
+    | { type: 'TranslateIt' }
+    | { type: 'TranslateNl' }
+    | { type: 'TranslatePl' }
+    | { type: 'TranslateTr' }
+    | { type: 'TranslateHy' }
+    | { type: 'TranslateFa' }
+    | { type: 'TranslateVi' }
+    | { type: 'TranslateId' }
+    | { type: 'TranslateKo' }
+    | { type: 'TranslateBn' }
+    | { type: 'TranslateUr' }
+    | { type: 'TranslateTh' }
+    | { type: 'TranslateSv' }
+    | { type: 'TranslateDa' }
+    | { type: 'TranslateFi' }
+    | { type: 'TranslateHu' }
     // Currency conversion actions (10)
-    | 'convert_usd'
-    | 'convert_eur'
-    | 'convert_gbp'
-    | 'convert_jpy'
-    | 'convert_aud'
-    | 'convert_cad'
-    | 'convert_chf'
-    | 'convert_cny'
-    | 'convert_inr'
-    | 'convert_mxn'
-    // Unit conversion actions - Length (8)
-    | 'convert_to_mm'
-    | 'convert_to_cm'
-    | 'convert_to_m'
-    | 'convert_to_km'
-    | 'convert_to_in'
-    | 'convert_to_ft'
-    | 'convert_to_yd'
-    | 'convert_to_mi'
-    // Unit conversion actions - Mass (5)
-    | 'convert_to_mg'
-    | 'convert_to_g'
-    | 'convert_to_kg'
-    | 'convert_to_oz'
-    | 'convert_to_lb'
-    // Unit conversion actions - Volume (7)
-    | 'convert_to_ml'
-    | 'convert_to_l'
-    | 'convert_to_fl_oz'
-    | 'convert_to_cup'
-    | 'convert_to_pint'
-    | 'convert_to_quart'
-    | 'convert_to_gal'
-    // Unit conversion actions - Temperature (3)
-    | 'convert_to_c'
-    | 'convert_to_f'
-    | 'convert_to_k'
-    // Unit conversion actions - Speed (4)
-    | 'convert_to_ms'
-    | 'convert_to_kmh'
-    | 'convert_to_mph'
-    | 'convert_to_knot'
-    // Cross-category conversions - Volume to Mass (4)
-    | 'convert_vol_to_g'
-    | 'convert_vol_to_kg'
-    | 'convert_vol_to_oz'
-    | 'convert_vol_to_lb'
-    // Cross-category conversions - Mass to Volume (7)
-    | 'convert_mass_to_ml'
-    | 'convert_mass_to_l'
-    | 'convert_mass_to_fl_oz'
-    | 'convert_mass_to_cup'
-    | 'convert_mass_to_pint'
-    | 'convert_mass_to_quart'
-    | 'convert_mass_to_gal'
-    // Time zone conversion - polymorphic variant
-    | { convert_time: string }  // Carries timezone ID
+    | { type: 'ConvertUsd' }
+    | { type: 'ConvertEur' }
+    | { type: 'ConvertGbp' }
+    | { type: 'ConvertJpy' }
+    | { type: 'ConvertAud' }
+    | { type: 'ConvertCad' }
+    | { type: 'ConvertChf' }
+    | { type: 'ConvertCny' }
+    | { type: 'ConvertInr' }
+    | { type: 'ConvertMxn' }
+    // Generic unit conversion - with payload
+    | { type: 'ConvertUnit'; payload: { target: string } }
+    // Time zone conversion - with payload
+    | { type: 'ConvertTime'; payload: string }
     // Definition actions
-    | 'find_synonyms'
-    | 'find_antonyms'
-    | 'find_antonyms'
-    | 'brief_definition'
+    | { type: 'FindSynonyms' }
+    | { type: 'FindAntonyms' }
+    | { type: 'BriefDefinition' }
+    // Clipboard actions
+    | { type: 'ClearClipboardHistory' }
+    | { type: 'PauseClipboard' }
+    | { type: 'ResumeClipboard' }
     // Text analysis actions
-    | 'count_words'
-    | 'count_chars'
-    | 'reading_time';
+    | { type: 'CountWords' }
+    | { type: 'CountChars' }
+    | { type: 'ReadingTime' };
 
 export interface ConvertTimeRequest {
     time_input: string;

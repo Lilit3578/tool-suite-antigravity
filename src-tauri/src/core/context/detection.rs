@@ -27,8 +27,11 @@ pub fn detect_currency(text: &str) -> Option<CurrencyInfo> {
     };
     
     // Fuzzy pattern: optional prefix, number, optional whitespace, optional suffix
-    let re = Regex::new(r"(?i)^\s*([^\d\s\.,]*)[\s]*([\d\.,]+)[\s]*([^\d\s\.,]*)\s*$")
-        .expect("valid currency regex");
+    static CURRENCY_REGEX: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    let re = CURRENCY_REGEX.get_or_init(|| {
+        Regex::new(r"(?i)^\s*([^\d\s\.,]*)[\s]*([\d\.,]+)[\s]*([^\d\s\.,]*)\s*$")
+            .expect("valid currency regex")
+    });
 
     if let Some(caps) = re.captures(truncated_text.trim()) {
         let prefix = caps.get(1).map(|m| m.as_str()).unwrap_or("").trim();

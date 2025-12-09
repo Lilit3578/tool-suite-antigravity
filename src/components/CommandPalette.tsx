@@ -341,7 +341,7 @@ export function CommandPalette() {
         const handleKeyDown = (e: KeyboardEvent) => {
             // Only handle if palette window is focused
             if (!document.hasFocus()) return;
-            
+
             // Don't trigger shortcuts if user is actively searching (has query text)
             // This allows typing numbers in the search input
             if (query.trim().length > 0) return;
@@ -495,11 +495,15 @@ export function CommandPalette() {
     }
 
     const getIcon = (command: CommandItem) => {
-        if (command.widget_type === 'translator' || (typeof command.action_type === 'string' && command.action_type.startsWith('translate_'))) {
+        // Determine icon based on widget type or action type
+        if (command.widget_type === 'translator' || (command.action_type && 'type' in command.action_type && command.action_type.type.startsWith('Translate'))) {
             return <Languages className="w-4 h-4" />;
         }
-        if (command.widget_type === 'currency' || (typeof command.action_type === 'string' && command.action_type.startsWith('convert_'))) {
+        if (command.widget_type === 'currency' || (command.action_type && 'type' in command.action_type && command.action_type.type.startsWith('Convert') && command.action_type.type.includes('Usd'))) {
             return <DollarSign className="w-4 h-4" />;
+        }
+        if (command.widget_type === 'unit_converter' || (command.action_type && 'type' in command.action_type && command.action_type.type === 'ConvertUnit')) {
+            return <DollarSign className="w-4 h-4" />; // Using DollarSign as a generic conversion icon for now
         }
         if (command.widget_type === 'settings') {
             return <Settings className="w-4 h-4" />;

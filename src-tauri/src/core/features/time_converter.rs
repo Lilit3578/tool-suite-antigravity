@@ -348,7 +348,9 @@ pub fn parse_and_convert_time(request: ConvertTimeRequest) -> crate::shared::err
                         };
                         
                         smart_note = Some(format!("Uses the same timezone as {}", keyword_capitalized));
-                        println!("[TimeConverter]   ✅ Smart note generated: '{}'", smart_note.as_ref().unwrap());
+                        if let Some(note) = &smart_note {
+                            println!("[TimeConverter]   ✅ Smart note generated: '{}'", note);
+                        }
                     } else {
                         println!("[TimeConverter]   ℹ️  Matched keyword '{}' is the primary city, no note needed", keyword);
                     }

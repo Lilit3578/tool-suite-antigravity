@@ -8,6 +8,7 @@
 
 pub mod history;
 pub mod monitor;
+pub mod filter;
 
 pub use history::ClipboardHistory;
 pub use monitor::ClipboardMonitor;

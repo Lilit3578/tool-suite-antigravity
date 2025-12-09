@@ -34,11 +34,13 @@ pub fn run() {
             
             // Load settings
             // Load settings
-            let _settings = tauri::async_runtime::block_on(async {
-                shared::settings::AppSettings::load().await
-            }).unwrap_or_else(|e| {
-                eprintln!("Failed to load settings: {}", e);
-                shared::settings::AppSettings::default()
+            // Load settings asynchronously to avoid blocking main thread
+            tauri::async_runtime::spawn(async {
+                if let Err(e) = shared::settings::AppSettings::load().await {
+                    eprintln!("Failed to load settings: {}", e);
+                } else {
+                    println!("✅ Settings loaded");
+                }
             });
 
             // Initialize clipboard history and monitor
@@ -290,7 +292,7 @@ pub fn run() {
                                 } else {
                                     // Give window focus after showing
                                     if let Some(window) = handle_clone.get_webview_window("palette-window") {
-                                        std::thread::sleep(std::time::Duration::from_millis(150));
+                                        tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
                                         window.set_focus().ok();
                                     }
                                 }
@@ -384,6 +386,10 @@ pub fn run() {
             core::features::definition::lookup_definition,
             core::features::text_analyser::analyze_text,
             core::clipboard::write_clipboard_text,
+            // Unit Converter commands (new registry-based API)
+            core::features::unit_converter::parse_text_command,
+            core::features::unit_converter::get_all_units_command,
+            core::features::unit_converter::convert_units_command,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
@@ -577,7 +583,11 @@ fn show_widget_window_legacy(app: &tauri::AppHandle, widget: &str, has_selection
                 window.show().ok();
             }
                     
-                    std::thread::sleep(std::time::Duration::from_millis(100));
+            let window_clone = window.clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                // Focus logic if needed
+            });
                             } else {
             println!("🔵 [DEBUG] [show_widget_window] Showing non-palette widget '{}'...", widget);
             

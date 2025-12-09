@@ -55,8 +55,40 @@ pub struct ConvertUnitsRequest {
 #[ts(export, export_to = "../../src/types/bindings.ts")]
 pub struct ConvertUnitsResponse {
     pub result: f64,
+    pub formatted_result: String,
     pub from_unit: String,
     pub to_unit: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct ConvertUnitPayload {
+    pub value: f64,
+    pub from_unit: String,
+    pub target_unit: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct ParseUnitResponse {
+    pub amount: f64,
+    pub unit: String,
+    pub category: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct GetUnitsResponse {
+    pub units: Vec<UnitDTO>,
+}
+
+// Rich Unit Data Transfer Object for frontend
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct UnitDTO {
+    pub id: String,       // Unit symbol (e.g., "m", "kg")
+    pub label: String,    // Display name (e.g., "Meters", "Kilograms")
+    pub category: String, // Category (e.g., "Length", "Mass")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -75,9 +107,10 @@ pub struct LogRequest {
 }
 
 
-// New types for unified command palette
+// Action types for command palette and widget actions
+// Using adjacently tagged serialization for frontend compatibility
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
+#[serde(tag = "type", content = "payload")]
 #[ts(export, export_to = "../../src/types/bindings.ts")]
 pub enum ActionType {
     // Translation actions - 26 languages
@@ -120,57 +153,8 @@ pub enum ActionType {
     ConvertInr,
     ConvertMxn,
     
-    // Unit conversion actions - Length (8)
-    ConvertToMM,
-    ConvertToCM,
-    ConvertToM,
-    ConvertToKM,
-    ConvertToIN,
-    ConvertToFT,
-    ConvertToYD,
-    ConvertToMI,
-    
-    // Unit conversion actions - Mass (5)
-    ConvertToMG,
-    ConvertToG,
-    ConvertToKG,
-    ConvertToOZ,
-    ConvertToLB,
-    
-    // Unit conversion actions - Volume (7)
-    ConvertToML,
-    ConvertToL,
-    ConvertToFlOz,
-    ConvertToCup,
-    ConvertToPint,
-    ConvertToQuart,
-    ConvertToGal,
-    
-    // Unit conversion actions - Temperature (3)
-    ConvertToC,
-    ConvertToF,
-    ConvertToK,
-    
-    // Unit conversion actions - Speed (4)
-    ConvertToMS,
-    ConvertToKMH,
-    ConvertToMPH,
-    ConvertToKnot,
-    
-    // Cross-category conversions - Volume to Mass (4)
-    ConvertVolToG,
-    ConvertVolToKG,
-    ConvertVolToOZ,
-    ConvertVolToLB,
-    
-    // Cross-category conversions - Mass to Volume (7)
-    ConvertMassToML,
-    ConvertMassToL,
-    ConvertMassToFlOz,
-    ConvertMassToCup,
-    ConvertMassToPint,
-    ConvertMassToQuart,
-    ConvertMassToGal,
+    // Generic unit conversion action with payload
+    ConvertUnit { target: String },
     
     // Time zone conversion - polymorphic variant carrying timezone ID
     ConvertTime(String),

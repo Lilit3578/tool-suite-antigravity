@@ -478,13 +478,15 @@ pub fn show_and_restore_focus(window: &tauri::WebviewWindow, original_app: Optio
     
     // If we have an original app name, restore focus to it immediately
     if let Some(app_name) = original_app {
-        // Use a small delay to let the window appear first
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        
-        // Restore focus to the original app
-        // This is done via AppleScript, so we need to import the automation module
-        // For now, we'll just log it - the caller should handle focus restoration
-        println!("🔵 [DEBUG] [Fullscreen] Window shown, should restore focus to: {}", app_name);
+        let app_name_owned = app_name.to_string();
+        tauri::async_runtime::spawn(async move {
+            // Use a small delay to let the window appear first
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            
+            // Restore focus to the original app
+            println!("🔵 [DEBUG] [Fullscreen] Window shown, should restore focus to: {}", app_name_owned);
+            // Actual AppleScript implementation would go here
+        });
     }
     
     Ok(())

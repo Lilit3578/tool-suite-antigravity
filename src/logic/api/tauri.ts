@@ -19,6 +19,10 @@ import type {
     LookupDefinitionRequest,
     LookupDefinitionResponse,
     TextAnalysisResponse,
+    ParseUnitResponse,
+    GetUnitsResponse,
+    ConvertUnitsRequest,
+    ConvertUnitsResponse,
 } from "../types";
 
 
@@ -201,5 +205,26 @@ export const api = {
      */
     async analyzeText(text: string): Promise<TextAnalysisResponse> {
         return invoke<TextAnalysisResponse>("analyze_text", { request: { text } });
+    },
+
+    /**
+     * Parse text to extract unit and amount (backend registry)
+     */
+    async parseTextCommand(text: string): Promise<ParseUnitResponse> {
+        return invoke<ParseUnitResponse>("parse_text_command", { text });
+    },
+
+    /**
+     * Get all available units from backend registry
+     */
+    async getAllUnits(): Promise<GetUnitsResponse> {
+        return invoke<GetUnitsResponse>("get_all_units_command");
+    },
+
+    /**
+     * Convert units using backend registry
+     */
+    async convertUnitsCommand(request: ConvertUnitsRequest): Promise<ConvertUnitsResponse> {
+        return invoke<ConvertUnitsResponse>("convert_units_command", { request });
     },
 };
