@@ -118,6 +118,11 @@ pub enum ActionType {
     /// Replaces: TranslateEn, TranslateZh, TranslateEs, etc.
     Translate(TranslatePayload),
     
+    // ===== NEW: Phase 2 =====
+    /// Handles ALL currency conversions with a single variant
+    /// Replaces: ConvertUsd, ConvertEur, ConvertGbp, etc.
+    ConvertCurrency(CurrencyPayload),
+    
     // ===== OLD: Keep temporarily for backward compatibility =====
     // Translation actions - 26 languages (to be removed in Phase 4)
     #[deprecated(note = "Use Translate(TranslatePayload) instead")]
@@ -173,16 +178,26 @@ pub enum ActionType {
     #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateHu,
     
-    // Currency conversion actions - 10 currencies
+    // Currency conversion actions - 10 currencies (to be removed in Phase 4)
+    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
     ConvertUsd,
+    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
     ConvertEur,
+    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
     ConvertGbp,
+    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
     ConvertJpy,
+    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
     ConvertAud,
+    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
     ConvertCad,
+    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
     ConvertChf,
+    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
     ConvertCny,
+    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
     ConvertInr,
+    #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
     ConvertMxn,
     
     // Generic unit conversion action with payload
@@ -218,6 +233,15 @@ pub struct TranslatePayload {
     pub target_lang: String,
     /// Optional source language code (None = auto-detect)
     pub source_lang: Option<String>,
+}
+
+/// Payload for currency conversion actions (Phase 2)
+/// Carries target currency code
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct CurrencyPayload {
+    /// Target currency code (e.g., "USD", "EUR", "GBP")
+    pub target_currency: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

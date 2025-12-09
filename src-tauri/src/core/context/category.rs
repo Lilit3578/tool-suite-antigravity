@@ -188,8 +188,9 @@ pub fn get_action_category(action: &ActionType) -> Option<ContextCategory> {
         | ActionType::CountChars
         | ActionType::ReadingTime => Some(ContextCategory::Text),
         
-        // Currency conversion actions → Currency
-        ActionType::ConvertUsd
+        // Currency conversion actions → Currency (NEW + OLD variants)
+        ActionType::ConvertCurrency(_)  // Phase 2: New structured variant
+        | ActionType::ConvertUsd
         | ActionType::ConvertEur
         | ActionType::ConvertGbp
         | ActionType::ConvertJpy
