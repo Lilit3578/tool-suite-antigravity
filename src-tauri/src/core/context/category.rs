@@ -181,9 +181,13 @@ pub fn get_action_category(action: &ActionType) -> Option<ContextCategory> {
         | ActionType::TranslateDa
         | ActionType::TranslateFi
         | ActionType::TranslateHu
+        // Definition actions (NEW + OLD)
+        | ActionType::DefinitionAction(_)  // Phase 3: New structured variant
         | ActionType::FindSynonyms
         | ActionType::FindAntonyms
         | ActionType::BriefDefinition
+        // Text analysis actions (NEW + OLD)
+        | ActionType::AnalyzeText(_)  // Phase 3: New structured variant
         | ActionType::CountWords
         | ActionType::CountChars
         | ActionType::ReadingTime => Some(ContextCategory::Text),
@@ -204,11 +208,13 @@ pub fn get_action_category(action: &ActionType) -> Option<ContextCategory> {
         // Generic unit conversion → None (polymorphic, handles all unit categories)
         ActionType::ConvertUnit { .. } => None,
         
-        // Time conversion
-        ActionType::ConvertTime(_) => Some(ContextCategory::Time),
+        // Time conversion (NEW + OLD)
+        ActionType::ConvertTimeAction(_)  // Phase 3: New structured variant
+        | ActionType::ConvertTime(_) => Some(ContextCategory::Time),
         
-        // System actions
-        ActionType::ClearClipboardHistory
+        // System actions (NEW + OLD)
+        ActionType::ClipboardAction(_)  // Phase 3: New structured variant
+        | ActionType::ClearClipboardHistory
         | ActionType::PauseClipboard
         | ActionType::ResumeClipboard => Some(ContextCategory::General),
     }

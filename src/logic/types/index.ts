@@ -103,6 +103,12 @@ export type ActionType =
     | { type: 'Translate'; payload: { target_lang: string; source_lang?: string } }
     | { type: 'ConvertCurrency'; payload: { target_currency: string } }
 
+    // ===== NEW: Phase 3 - Additional structured variants =====
+    | { type: 'ConvertTimeAction'; payload: { target_timezone: string } }
+    | { type: 'AnalyzeText'; payload: { action: 'CountWords' | 'CountChars' | 'ReadingTime' } }
+    | { type: 'ClipboardAction'; payload: { action: 'ClearHistory' | 'Pause' | 'Resume' } }
+    | { type: 'DefinitionAction'; payload: { action: 'FindSynonyms' | 'FindAntonyms' | 'BriefDefinition' } }
+
     // ===== OLD: Deprecated variants (kept for backward compatibility) =====
     // Translation actions (26) - simple variants (no payload)
     | { type: 'TranslateEn' }

@@ -200,25 +200,46 @@ pub enum ActionType {
     #[deprecated(note = "Use ConvertCurrency(CurrencyPayload) instead")]
     ConvertMxn,
     
-    // Generic unit conversion action with payload
+    // ===== NEW: Phase 3 =====
+    /// Time conversion with structured payload
+    ConvertTimeAction(TimePayload),
+    /// Text analysis actions (word count, char count, reading time)
+    AnalyzeText(TextAnalysisPayload),
+    /// Clipboard management actions
+    ClipboardAction(ClipboardPayload),
+    /// Definition lookup actions (synonyms, antonyms, definitions)
+    DefinitionAction(DefinitionPayload),
+    
+    // ===== OLD: Deprecated variants (Phase 3) =====
+    // Generic unit conversion action with payload (already structured - keep as is)
     ConvertUnit { target: String },
     
     // Time zone conversion - polymorphic variant carrying timezone ID
+    #[deprecated(note = "Use ConvertTimeAction(TimePayload) instead")]
     ConvertTime(String),
     
     // Definition lookup actions
+    #[deprecated(note = "Use DefinitionAction(DefinitionPayload) instead")]
     FindSynonyms,
+    #[deprecated(note = "Use DefinitionAction(DefinitionPayload) instead")]
     FindAntonyms,
+    #[deprecated(note = "Use DefinitionAction(DefinitionPayload) instead")]
     BriefDefinition,
     
     // Clipboard actions
+    #[deprecated(note = "Use ClipboardAction(ClipboardPayload) instead")]
     ClearClipboardHistory,
+    #[deprecated(note = "Use ClipboardAction(ClipboardPayload) instead")]
     PauseClipboard,
+    #[deprecated(note = "Use ClipboardAction(ClipboardPayload) instead")]
     ResumeClipboard,
 
     // Text analysis actions
+    #[deprecated(note = "Use AnalyzeText(TextAnalysisPayload) instead")]
     CountWords,
+    #[deprecated(note = "Use AnalyzeText(TextAnalysisPayload) instead")]
     CountChars,
+    #[deprecated(note = "Use AnalyzeText(TextAnalysisPayload) instead")]
     ReadingTime,
 }
 
@@ -242,6 +263,67 @@ pub struct TranslatePayload {
 pub struct CurrencyPayload {
     /// Target currency code (e.g., "USD", "EUR", "GBP")
     pub target_currency: String,
+}
+
+// ===== Phase 3: Additional Payload Structures =====
+
+/// Payload for time conversion actions
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct TimePayload {
+    /// Target timezone (IANA identifier)
+    pub target_timezone: String,
+}
+
+/// Payload for text analysis actions
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct TextAnalysisPayload {
+    /// Type of text analysis to perform
+    pub action: TextAnalysisAction,
+}
+
+/// Text analysis action types
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub enum TextAnalysisAction {
+    CountWords,
+    CountChars,
+    ReadingTime,
+}
+
+/// Payload for clipboard management actions
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct ClipboardPayload {
+    /// Type of clipboard action to perform
+    pub action: ClipboardAction,
+}
+
+/// Clipboard action types
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub enum ClipboardAction {
+    ClearHistory,
+    Pause,
+    Resume,
+}
+
+/// Payload for definition lookup actions
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct DefinitionPayload {
+    /// Type of definition lookup to perform
+    pub action: DefinitionAction,
+}
+
+/// Definition action types
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub enum DefinitionAction {
+    FindSynonyms,
+    FindAntonyms,
+    BriefDefinition,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
