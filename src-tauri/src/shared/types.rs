@@ -113,32 +113,64 @@ pub struct LogRequest {
 #[serde(tag = "type", content = "payload")]
 #[ts(export, export_to = "../../src/types/bindings.ts")]
 pub enum ActionType {
-    // Translation actions - 26 languages
+    // ===== NEW: Intent-based variants (Phase 1) =====
+    /// Handles ALL translations with a single variant
+    /// Replaces: TranslateEn, TranslateZh, TranslateEs, etc.
+    Translate(TranslatePayload),
+    
+    // ===== OLD: Keep temporarily for backward compatibility =====
+    // Translation actions - 26 languages (to be removed in Phase 4)
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateEn,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateZh,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateEs,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateFr,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateDe,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateAr,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslatePt,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateRu,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateJa,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateHi,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateIt,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateNl,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslatePl,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateTr,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateHy,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateFa,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateVi,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateId,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateKo,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateBn,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateUr,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateTh,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateSv,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateDa,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateFi,
+    #[deprecated(note = "Use Translate(TranslatePayload) instead")]
     TranslateHu,
     
     // Currency conversion actions - 10 currencies
@@ -173,6 +205,19 @@ pub enum ActionType {
     CountWords,
     CountChars,
     ReadingTime,
+}
+
+// ===== NEW: Payload Structures (Phase 1) =====
+
+/// Payload for translation actions
+/// Carries target language code and optional source language
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct TranslatePayload {
+    /// Target language code (e.g., "en", "es", "zh")
+    pub target_lang: String,
+    /// Optional source language code (None = auto-detect)
+    pub source_lang: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

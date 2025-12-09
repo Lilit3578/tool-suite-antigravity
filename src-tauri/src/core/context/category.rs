@@ -153,8 +153,9 @@ pub fn detect_content_category(text: &str) -> Option<ContextCategory> {
 /// adding a match arm here, not touching detection or frontend logic.
 pub fn get_action_category(action: &ActionType) -> Option<ContextCategory> {
     match action {
-        // Translation actions → Text
-        ActionType::TranslateEn
+        // Translation actions → Language (NEW + OLD variants)
+        ActionType::Translate(_)  // Phase 1: New structured variant
+        | ActionType::TranslateEn
         | ActionType::TranslateZh
         | ActionType::TranslateEs
         | ActionType::TranslateFr
