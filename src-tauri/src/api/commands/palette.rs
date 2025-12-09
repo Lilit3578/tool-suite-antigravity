@@ -165,6 +165,9 @@ pub async fn get_command_items(
 /// Execute an action
 #[tauri::command]
 pub async fn execute_action(request: ExecuteActionRequest) -> AppResult<ExecuteActionResponse> {
+    println!("🔵 [execute_action] Received action: {:?}", request.action_type);
+    println!("🔵 [execute_action] Params: {:?}", request.params);
+    
     // features::execute_feature_action currently returns Result<..., String>.
     // We need to map it.
     features::execute_feature_action(&request).await.map_err(AppError::from)

@@ -2,7 +2,7 @@
 import {
     type ClipboardHistoryItem,
     type ClipboardItemType as GenClipboardItemType
-} from '../../types/bindings';
+} from '@/types/bindings';
 
 export interface AppSettings {
     hotkeys: HotkeySettings;
@@ -47,7 +47,7 @@ export interface TranslateResponse {
 }
 
 export interface ConvertCurrencyRequest {
-    amount: number;
+    amount: string;
     from: string;
     to: string;
     date?: string;
@@ -99,6 +99,11 @@ export interface LogRequest {
 // IMPORTANT: Must match Rust's adjacently tagged serialization format
 // Backend uses: #[serde(tag = "type", content = "payload")]
 export type ActionType =
+    // ===== NEW: Phase 1 & 2 - Structured payload variants =====
+    | { type: 'Translate'; payload: { target_lang: string; source_lang?: string } }
+    | { type: 'ConvertCurrency'; payload: { target_currency: string } }
+
+    // ===== OLD: Deprecated variants (kept for backward compatibility) =====
     // Translation actions (26) - simple variants (no payload)
     | { type: 'TranslateEn' }
     | { type: 'TranslateZh' }

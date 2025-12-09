@@ -159,7 +159,12 @@ pub fn get_context_boost(captured_text: &str) -> HashMap<String, f64> {
 pub async fn execute_feature_action(
     request: &ExecuteActionRequest,
 ) -> crate::shared::error::AppResult<ExecuteActionResponse> {
+    println!("🔵 [execute_feature_action] Dispatching action: {:?}", request.action_type);
+    
     for feature in AppFeature::all() {
+        let feature_id = feature.id();
+        println!("🔵 [execute_feature_action] Trying feature: {}", feature_id);
+        
         // Use manual dispatch for async methods (enum_dispatch doesn't support async)
         let result = match &feature {
             AppFeature::Translator(f) => f.execute_action(&request.action_type, &request.params).await,
@@ -171,7 +176,10 @@ pub async fn execute_feature_action(
             AppFeature::TextAnalyser(f) => f.execute_action(&request.action_type, &request.params).await,
         };
         match result {
-            Ok(response) => return Ok(response),
+            Ok(response) => {
+                println!("✅ [execute_feature_action] Feature {} handled the action successfully", feature_id);
+                return Ok(response);
+            }
              // We'll assume implementations return AppError::Unknown("Unsupported action type") or similar 
              // for now, OR we just check if it returns ANY error?
              // No, if a feature TRIES to handle it and FAILS (e.g. network error), we should return that error.
@@ -183,17 +191,23 @@ pub async fn execute_feature_action(
              // Actually, `core::shared::errors::ERR_UNSUPPORTED_ACTION` exists.
             Err(e) => {
                  let err_str = e.to_string();
-                 if err_str == crate::shared::errors::ERR_UNSUPPORTED_ACTION {
+                 println!("🔴 [execute_feature_action] Feature {} returned error: {}", feature_id, err_str);
+                 // Check if error message CONTAINS the unsupported action text
+                 // (AppError::Unknown wraps it with "Unknown Error: " prefix)
+                 if err_str.contains(crate::shared::errors::ERR_UNSUPPORTED_ACTION) {
+                    println!("   → Continuing to next feature (unsupported action)");
                     continue;
                  }
                  // If it's a real error (not just unsupported), we could return it?
                  // But multiple features might share action types? No, ActionType variants are unique usually.
                  // So if a feature claims to handle it (by not returning Unsupported), but fails, we stop.
+                 println!("   → Returning error (not unsupported action)");
                  return Err(e);
             }
         }
     }
     
     // If we get here, no feature handled it
+    println!("🔴 [execute_feature_action] No feature handled the action!");
     Err(crate::shared::error::AppError::Feature("Unknown action type".to_string()))
 }

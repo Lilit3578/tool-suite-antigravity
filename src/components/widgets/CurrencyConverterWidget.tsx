@@ -155,7 +155,7 @@ export function CurrencyConverterWidget() {
     async function convertCurrency(from: string, to: string, amt: number) {
         try {
             const response = await api.convertCurrency({
-                amount: amt,
+                amount: String(amt),
                 from,
                 to,
             });
