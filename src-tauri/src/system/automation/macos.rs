@@ -225,6 +225,8 @@ const CLIPBOARD_POLL_INTERVAL_MS: u64 = 50;
 /// 2. Transactional "Ghost" Copy Fallback: If AX fails, simulates Cmd+C and polls clipboard
 ///    - Waits for clipboard change count to increment before reading
 ///    - Optionally restores previous clipboard content
+/// 
+/// IMPORTANT: Always writes captured text to clipboard so frontend can read it
 pub fn capture_selection() -> CommandResult<Option<String>> {
     // Use catch_unwind to prevent panics from crashing the app
     let result = std::panic::catch_unwind(|| {
@@ -237,6 +239,12 @@ pub fn capture_selection() -> CommandResult<Option<String>> {
         match get_ax_selection_recursive() {
             Ok(Some(text)) => {
                 println!("[CaptureSelection] ✅ Success via AX API (recursive search)");
+                
+                // CRITICAL FIX: Write to clipboard so frontend can read it
+                if let Err(e) = write_text_to_clipboard(&text) {
+                    eprintln!("[CaptureSelection] ⚠️ Failed to write to clipboard: {:?}", e);
+                }
+                
                 return Ok(Some(text));
             }
             Ok(None) => {
@@ -252,6 +260,7 @@ pub fn capture_selection() -> CommandResult<Option<String>> {
         match capture_via_simulated_copy() {
             Ok(Some(text)) => {
                 println!("[CaptureSelection] ✅ Success via fallback (simulated copy)");
+                // Clipboard is already updated by simulated copy
                 Ok(Some(text))
             }
             Ok(None) => {
@@ -271,6 +280,36 @@ pub fn capture_selection() -> CommandResult<Option<String>> {
             eprintln!("[CaptureSelection] ❌ PANIC caught in capture_selection!");
             Err(CommandError::SystemIO("Internal error: panic in capture_selection".to_string()))
         }
+    }
+}
+
+/// Helper function to write text to clipboard
+fn write_text_to_clipboard(text: &str) -> CommandResult<()> {
+    unsafe {
+        let pb: id = msg_send![class!(NSPasteboard), generalPasteboard];
+        if pb == nil {
+            return Err(CommandError::SystemIO("Failed to get NSPasteboard".to_string()));
+        }
+        
+        // Clear clipboard
+        let _: () = msg_send![pb, clearContents];
+        
+        // Create NSString
+        let ns_string = NSString::alloc(nil).init_str(text);
+        if ns_string == nil {
+            return Err(CommandError::SystemIO("Failed to create NSString".to_string()));
+        }
+        
+        // Write to clipboard
+        let array: id = msg_send![class!(NSArray), arrayWithObject:ns_string];
+        let success: bool = msg_send![pb, writeObjects:array];
+        
+        if !success {
+            return Err(CommandError::SystemIO("Failed to write to clipboard".to_string()));
+        }
+        
+        println!("[WriteClipboard] ✅ Wrote {} bytes to clipboard", text.len());
+        Ok(())
     }
 }
 

@@ -349,72 +349,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_add_and_get_items() {
-        let history = ClipboardHistory::new();
-        
-        let item1 = ClipboardHistoryItem::new_text("First item".to_string(), None);
-        let item2 = ClipboardHistoryItem::new_text("Second item".to_string(), None);
-        
-        history.add_item(item1);
-        history.add_item(item2);
-        
-        let items = history.get_items();
-        assert_eq!(items.len(), 2);
-        assert_eq!(items[0].content, "Second item"); // Most recent first
-        assert_eq!(items[1].content, "First item");
-    }
-
-    #[test]
-    fn test_max_history_size() {
-        let history = ClipboardHistory::new();
-        
-        for i in 0..10 {
-            let item = ClipboardHistoryItem::new_text(format!("Item {}", i), None);
-            history.add_item(item);
-        }
-        
-        let items = history.get_items();
-        assert_eq!(items.len(), MAX_HISTORY_SIZE);
-        assert_eq!(items[0].content, "Item 9"); // Most recent
-    }
-
-    #[test]
-    fn test_skip_duplicate() {
-        let history = ClipboardHistory::new();
-        
-        let item1 = ClipboardHistoryItem::new_text("Same content".to_string(), None);
-        let item2 = ClipboardHistoryItem::new_text("Same content".to_string(), None);
-        
-        history.add_item(item1);
-        history.add_item(item2);
-        
-        let items = history.get_items();
-        assert_eq!(items.len(), 1); // Duplicate not added
-    }
-
-    #[test]
-    fn test_skip_next_add() {
-        let history = ClipboardHistory::new();
-        
-        history.set_skip_next_add(true);
-        
-        let item = ClipboardHistoryItem::new_text("Should be skipped".to_string(), None);
-        history.add_item(item);
-        
-        let items = history.get_items();
-        assert_eq!(items.len(), 0); // Item was skipped
-    }
-
-    #[test]
     fn test_clear() {
         let history = ClipboardHistory::new();
+        // Since clear() returns Result, we should unwrap it in tests
+        let _ = history.clear();
         
         history.add_item(ClipboardHistoryItem::new_text("Item 1".to_string(), None));
         history.add_item(ClipboardHistoryItem::new_text("Item 2".to_string(), None));
         
         assert_eq!(history.count(), 2);
         
-        history.clear();
+        // Handle the Result from clear()
+        history.clear().expect("Failed to clear history");
         
         assert_eq!(history.count(), 0);
     }

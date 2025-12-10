@@ -1,12 +1,16 @@
 // Time Zone Converter - Logic Layer
-// Fixed version addressing race conditions and parsing issues
+// Refactored for production readiness:
+// - Uses static regex compilations via `parsing` module
+// - clean error handling
+// - separated parsing logic
 
 pub mod constants;
+pub mod parsing;
 
-use chrono::{DateTime, Local, TimeZone, Utc, Offset};
+use chrono::{Local, TimeZone, Offset}; // Added Offset
 use chrono_tz::Tz;
 use chrono_english::{parse_date_string, Dialect};
-use crate::shared::types::{ConvertTimeRequest, ConvertTimeResponse, TimezoneInfo, ParsedTimeInput, CommandItem, ActionType, TimePayload, ExecuteActionResponse};
+use crate::shared::types::{ConvertTimeRequest, ConvertTimeResponse, ParsedTimeInput, CommandItem, ActionType, TimePayload, ExecuteActionResponse, TimezoneInfo};
 use super::{FeatureSync, FeatureAsync};
 use std::collections::HashMap;
 use regex::Regex;

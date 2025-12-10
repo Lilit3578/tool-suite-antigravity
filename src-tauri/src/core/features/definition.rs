@@ -6,6 +6,7 @@ use crate::shared::types::*;
 use super::{FeatureSync, FeatureAsync};
 use std::collections::HashMap;
 use async_trait::async_trait;
+use super::definition_client;
 
 #[derive(Clone)]
 pub struct DefinitionFeature;
@@ -100,10 +101,9 @@ impl FeatureAsync for DefinitionFeature {
             word: word.clone(),
         };
         
-        // Execute lookup synchronously
-        let response = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(lookup_definition(request))
-        })?;
+        // Calculate logic response directly
+        // We call the command implementation here directly since we are on the backend
+        let response = lookup_definition(request).await?;
         
         // Format response based on action type
         use crate::shared::types::DefinitionAction;
@@ -155,140 +155,51 @@ fn sanitize_word(text: &str) -> String {
         .to_lowercase()
 }
 
-/// Look up word definition using Free Dictionary API
+/// Look up word definition using Free Dictionary API (via Client)
 #[tauri::command]
 pub async fn lookup_definition(request: LookupDefinitionRequest) -> crate::shared::error::AppResult<LookupDefinitionResponse> {
-    let client = reqwest::Client::new();
+    let entries = definition_client::lookup_word(&request.word).await?;
     
-    // Free Dictionary API endpoint
-    let url = format!(
-        "https://api.dictionaryapi.dev/api/v2/entries/en/{}",
-        urlencoding::encode(&request.word)
-    );
-    
-    match client.get(&url)
-        .header("User-Agent", "Mozilla/5.0")
-        .send()
-        .await
-    {
-        Ok(response) => {
-            if response.status().is_success() {
-                match response.json::<serde_json::Value>().await {
-                    Ok(json) => {
-                        // Parse the API response
-                        if let Some(entries) = json.as_array() {
-                            if let Some(first_entry) = entries.first() {
-                                let word = first_entry.get("word")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or(&request.word)
-                                    .to_string();
-                                
-                                let phonetic = first_entry.get("phonetic")
-                                    .and_then(|v| v.as_str())
-                                    .map(|s| s.to_string());
-                                
-                                let mut definitions = Vec::new();
-                                let mut all_synonyms = Vec::new();
-                                let mut all_antonyms = Vec::new();
-                                
-                                if let Some(meanings) = first_entry.get("meanings").and_then(|v| v.as_array()) {
-                                    for meaning in meanings {
-                                        let part_of_speech = meaning.get("partOfSpeech")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("unknown")
-                                            .to_string();
-                                        
-                                        // Extract definitions
-                                        if let Some(defs) = meaning.get("definitions").and_then(|v| v.as_array()) {
-                                            for def in defs.iter().take(3) { // Limit to 3 definitions per part of speech
-                                                let definition = def.get("definition")
-                                                    .and_then(|v| v.as_str())
-                                                    .unwrap_or("")
-                                                    .to_string();
-                                                
-                                                let example = def.get("example")
-                                                    .and_then(|v| v.as_str())
-                                                    .map(|s| s.to_string());
-                                                
-                                                definitions.push(DefinitionEntry {
-                                                    part_of_speech: part_of_speech.clone(),
-                                                    definition,
-                                                    example,
-                                                });
-                                                
-                                                // Extract nested synonyms
-                                                if let Some(syns) = def.get("synonyms").and_then(|v| v.as_array()) {
-                                                    for syn in syns {
-                                                        if let Some(s) = syn.as_str() {
-                                                            all_synonyms.push(s.to_string());
-                                                        }
-                                                    }
-                                                }
-                                                
-                                                // Extract nested antonyms
-                                                if let Some(ants) = def.get("antonyms").and_then(|v| v.as_array()) {
-                                                    for ant in ants {
-                                                        if let Some(a) = ant.as_str() {
-                                                            all_antonyms.push(a.to_string());
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        
-                                        // Extract synonyms
-                                        if let Some(synonyms) = meaning.get("synonyms").and_then(|v| v.as_array()) {
-                                            for syn in synonyms {
-                                                if let Some(s) = syn.as_str() {
-                                                    all_synonyms.push(s.to_string());
-                                                }
-                                            }
-                                        }
-                                        
-                                        // Extract antonyms
-                                        if let Some(antonyms) = meaning.get("antonyms").and_then(|v| v.as_array()) {
-                                            for ant in antonyms {
-                                                if let Some(a) = ant.as_str() {
-                                                    all_antonyms.push(a.to_string());
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                
-                                // Deduplicate synonyms and antonyms
-                                all_synonyms.sort();
-                                all_synonyms.dedup();
-                                all_antonyms.sort();
-                                all_antonyms.dedup();
-                                
-                                return Ok(LookupDefinitionResponse {
-                                    word,
-                                    phonetic,
-                                    definitions,
-                                    synonyms: all_synonyms,
-                                    antonyms: all_antonyms,
-                                });
-                            }
-                        }
-                        
-                        Err(crate::shared::error::AppError::Validation(format!("No definition found for '{}'", request.word)))
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to parse definition response: {}", e);
-                        Err(crate::shared::error::AppError::Unknown(format!("Failed to parse definition for '{}': {}", request.word, e)))
-                    }
-                }
-            } else if response.status().as_u16() == 404 {
-                Err(crate::shared::error::AppError::Validation(format!("Word '{}' not found in dictionary", request.word)))
-            } else {
-                eprintln!("Dictionary API returned error: {}", response.status());
-                Err(crate::shared::error::AppError::Network(format!("Dictionary API error for '{}'", request.word)))
+    // Map strict client types to app response types
+    if let Some(first_entry) = entries.into_iter().next() {
+        let mut all_definitions = Vec::new();
+        let mut all_synonyms = Vec::new();
+        let mut all_antonyms = Vec::new();
+        
+        for meaning in first_entry.meanings {
+            for def_detail in meaning.definitions.iter().take(3) {
+                all_definitions.push(DefinitionEntry {
+                    part_of_speech: meaning.part_of_speech.clone(),
+                    definition: def_detail.definition.clone(),
+                    example: def_detail.example.clone(),
+                });
+                
+                all_synonyms.extend(def_detail.synonyms.clone());
+                all_antonyms.extend(def_detail.antonyms.clone());
             }
+            
+            all_synonyms.extend(meaning.synonyms);
+            all_antonyms.extend(meaning.antonyms);
         }
-        Err(e) => {
-            eprintln!("Dictionary API request failed: {}", e);
-            Err(crate::shared::error::AppError::Network("Failed to connect to dictionary API".to_string()))
-        }
+        
+        all_synonyms.sort();
+        all_synonyms.dedup();
+        all_antonyms.sort();
+        all_antonyms.dedup();
+        
+        let phonetic = first_entry.phonetic.or_else(|| {
+            first_entry.phonetics.into_iter()
+                .find_map(|p| p.text)
+        });
+
+        Ok(LookupDefinitionResponse {
+            word: first_entry.word,
+            phonetic,
+            definitions: all_definitions,
+            synonyms: all_synonyms,
+            antonyms: all_antonyms,
+        })
+    } else {
+         Err(crate::shared::error::AppError::Validation(format!("No definition found for '{}'", request.word)))
     }
 }

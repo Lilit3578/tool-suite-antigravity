@@ -15,7 +15,9 @@ pub mod clipboard;
 pub mod unit_converter;
 pub mod time_converter;
 pub mod definition;
+pub mod definition_client;
 pub mod text_analyser;
+pub mod text_analyser_logic;
 
 use async_trait::async_trait;
 
@@ -155,59 +157,40 @@ pub fn get_context_boost(captured_text: &str) -> HashMap<String, f64> {
     boost_map
 }
 
-/// Execute an action across all features
+/// Execute an action using deterministic dispatch (O(1))
 pub async fn execute_feature_action(
     request: &ExecuteActionRequest,
 ) -> crate::shared::error::AppResult<ExecuteActionResponse> {
-    println!("🔵 [execute_feature_action] Dispatching action: {:?}", request.action_type);
     
-    for feature in AppFeature::all() {
-        let feature_id = feature.id();
-        println!("🔵 [execute_feature_action] Trying feature: {}", feature_id);
-        
-        // Use manual dispatch for async methods (enum_dispatch doesn't support async)
-        let result = match &feature {
-            AppFeature::Translator(f) => f.execute_action(&request.action_type, &request.params).await,
-            AppFeature::Currency(f) => f.execute_action(&request.action_type, &request.params).await,
-            AppFeature::Clipboard(f) => f.execute_action(&request.action_type, &request.params).await,
-            AppFeature::UnitConverter(f) => f.execute_action(&request.action_type, &request.params).await,
-            AppFeature::TimeConverter(f) => f.execute_action(&request.action_type, &request.params).await,
-            AppFeature::Definition(f) => f.execute_action(&request.action_type, &request.params).await,
-            AppFeature::TextAnalyser(f) => f.execute_action(&request.action_type, &request.params).await,
-        };
-        match result {
-            Ok(response) => {
-                println!("✅ [execute_feature_action] Feature {} handled the action successfully", feature_id);
-                return Ok(response);
-            }
-             // We'll assume implementations return AppError::Unknown("Unsupported action type") or similar 
-             // for now, OR we just check if it returns ANY error?
-             // No, if a feature TRIES to handle it and FAILS (e.g. network error), we should return that error.
-             // But if it just doesn't know the action, we continue.
-             
-             // To simplify: we'll check message for now, but ideally we add `AppError::UnsupportedAction` variant later.
-             // Or we rely on `utils.ts` equivalent in Rust? 
-             
-             // Actually, `core::shared::errors::ERR_UNSUPPORTED_ACTION` exists.
-            Err(e) => {
-                 let err_str = e.to_string();
-                 println!("🔴 [execute_feature_action] Feature {} returned error: {}", feature_id, err_str);
-                 // Check if error message CONTAINS the unsupported action text
-                 // (AppError::Unknown wraps it with "Unknown Error: " prefix)
-                 if err_str.contains(crate::shared::errors::ERR_UNSUPPORTED_ACTION) {
-                    println!("   → Continuing to next feature (unsupported action)");
-                    continue;
-                 }
-                 // If it's a real error (not just unsupported), we could return it?
-                 // But multiple features might share action types? No, ActionType variants are unique usually.
-                 // So if a feature claims to handle it (by not returning Unsupported), but fails, we stop.
-                 println!("   → Returning error (not unsupported action)");
-                 return Err(e);
-            }
-        }
+    // Deterministic match on ActionType logic instead of O(N) iteration
+    match &request.action_type {
+        ActionType::Translate(_) => {
+            println!("🔵 [dispatch] Routing Translate action -> Translator");
+            translator::TranslatorFeature.execute_action(&request.action_type, &request.params).await
+        },
+        ActionType::ConvertCurrency(_) => {
+            println!("🔵 [dispatch] Routing Currency action -> Currency");
+            currency::CurrencyFeature.execute_action(&request.action_type, &request.params).await
+        },
+        ActionType::ConvertTimeAction(_) => {
+            println!("🔵 [dispatch] Routing Time action -> TimeConverter");
+            time_converter::TimeConverterFeature.execute_action(&request.action_type, &request.params).await
+        },
+        ActionType::AnalyzeText(_) => {
+            println!("🔵 [dispatch] Routing TextAnalysis action -> TextAnalyser");
+            text_analyser::TextAnalyserFeature.execute_action(&request.action_type, &request.params).await
+        },
+        ActionType::ClipboardAction(_) => {
+            println!("🔵 [dispatch] Routing Clipboard action -> Clipboard");
+            clipboard::ClipboardFeature.execute_action(&request.action_type, &request.params).await
+        },
+        ActionType::DefinitionAction(_) => {
+            println!("🔵 [dispatch] Routing Definition action -> Definition");
+            definition::DefinitionFeature.execute_action(&request.action_type, &request.params).await
+        },
+         ActionType::ConvertUnit { .. } => {
+            println!("🔵 [dispatch] Routing Unit conversion -> UnitConverter");
+            unit_converter::UnitConverterFeature.execute_action(&request.action_type, &request.params).await
+        },
     }
-    
-    // If we get here, no feature handled it
-    println!("🔴 [execute_feature_action] No feature handled the action!");
-    Err(crate::shared::error::AppError::Feature("Unknown action type".to_string()))
 }

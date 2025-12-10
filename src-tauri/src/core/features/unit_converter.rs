@@ -315,39 +315,41 @@ impl FeatureAsync for UnitConverterFeature {
         println!("[execute_action] DEBUG: Received Action: {:?}", action_type);
         println!("[execute_action] DEBUG: Params: {:?}", params);
         
-        // Extract text from params
-        let text = params.get("text")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| crate::shared::error::AppError::Validation(ERR_MISSING_TEXT_PARAM.to_string()))?;
-
-        // Parse amount and source unit from text
-        let (amount, source_unit) = parse_unit_from_text(text)
-            .map_err(|e| crate::shared::error::AppError::Calculation(e))?;
-
-        // Handle only ConvertUnit action
-        let (target_unit, converted_value) = match action_type {
+        // Check action type FIRST before attempting any parsing
+        match action_type {
             ActionType::ConvertUnit { target } => {
+                // Extract text from params
+                let text = params.get("text")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| crate::shared::error::AppError::Validation(ERR_MISSING_TEXT_PARAM.to_string()))?;
+
+                // Parse amount and source unit from text
+                let (amount, source_unit) = parse_unit_from_text(text)
+                    .map_err(|e| crate::shared::error::AppError::Calculation(e))?;
+
                 let result = convert_value(amount, &source_unit, target)
                     .map_err(|e| crate::shared::error::AppError::Calculation(e))?;
-                (target.as_str(), result)
+                
+                let target_unit = target.as_str();
+                let converted_value = result;
+
+                // Format result with beautiful number formatting
+                let formatted_value = format_number(converted_value);
+                let result_string = format!("{} {}", formatted_value, target_unit);
+
+                Ok(ExecuteActionResponse {
+                    result: result_string,
+                    metadata: Some(json!({
+                        "from_unit": source_unit,
+                        "target_unit": target_unit,
+                        "original_amount": amount,
+                        "converted_amount": converted_value,
+                        "widget": "unit_converter"
+                    })),
+                })
             },
-            _ => return Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
-        };
-
-        // Format result with beautiful number formatting
-        let formatted_value = format_number(converted_value);
-        let result = format!("{} {}", formatted_value, target_unit);
-
-        Ok(ExecuteActionResponse {
-            result,
-            metadata: Some(json!({
-                "from_unit": source_unit,
-                "target_unit": target_unit,
-                "original_amount": amount,
-                "converted_amount": converted_value,
-                "widget": "unit_converter"
-            })),
-        })
+            _ => Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
+        }
     }
 }
 

@@ -46,7 +46,7 @@ impl FeatureAsync for ClipboardFeature {
         _action: &ActionType,
         _params: &serde_json::Value,
     ) -> crate::shared::error::AppResult<ExecuteActionResponse> {
-        Err(crate::shared::error::AppError::Feature("Clipboard feature doesn't support direct actions".to_string()))
+        Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string()))
     }
 }
 

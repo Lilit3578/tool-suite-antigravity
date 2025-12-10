@@ -5,6 +5,7 @@ import { Separator } from "../ui/separator";
 import { Textarea } from "../ui/textarea";
 import { LookupDefinitionResponse, DefinitionEntry } from "../../logic/types";
 import { Clipboard, Check } from "lucide-react";
+import { useDebounce } from "../../hooks/useDebounce";
 
 export function DefinitionWidget() {
     const [input, setInput] = useState("");
@@ -13,14 +14,19 @@ export function DefinitionWidget() {
     const [error, setError] = useState<string | null>(null);
     const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Debounce input to prevent spam
+    const debouncedInput = useDebounce(input, 600);
 
     // Load text on mount and focus
     useEffect(() => {
+        let isMounted = true;
         const loadText = async () => {
             try {
                 // First try clipboard (should have capture from shortcut)
                 const clipboardResult = await api.captureSelection("clipboard");
+                if (!isMounted) return;
+
                 if (clipboardResult.text && clipboardResult.text.trim()) {
                     const word = extractFirstWord(clipboardResult.text);
                     if (word) {
@@ -31,6 +37,8 @@ export function DefinitionWidget() {
 
                 // Fallback: selection
                 const result = await api.captureSelection("selection");
+                if (!isMounted) return;
+
                 if (result.text && result.text.trim()) {
                     const word = extractFirstWord(result.text);
                     if (word) {
@@ -44,7 +52,7 @@ export function DefinitionWidget() {
                 setResult(null);
                 setError(null);
             } catch (e) {
-                console.error("Failed to load text:", e);
+                // Silent catch as we just want to avoid crashing, no logging needed for user actions
             }
         };
 
@@ -56,44 +64,48 @@ export function DefinitionWidget() {
         };
 
         window.addEventListener("focus", handleFocus);
-        return () => window.removeEventListener("focus", handleFocus);
+        return () => {
+            isMounted = false;
+            window.removeEventListener("focus", handleFocus);
+        };
     }, []);
 
-    // Auto-lookup with debounce
+    // Effect for handling lookups based on debounced input
     useEffect(() => {
-        if (debounceRef.current) {
-            clearTimeout(debounceRef.current);
-        }
+        let isCancelled = false;
 
-        if (!input.trim()) {
-            setResult(null);
+        const fetchData = async () => {
+            if (!debouncedInput.trim()) {
+                setResult(null);
+                setError(null);
+                return;
+            }
+
+            setLoading(true);
             setError(null);
-            return;
-        }
 
-        debounceRef.current = setTimeout(() => {
-            lookupWord(input);
-        }, 600);
+            try {
+                const response = await api.lookupDefinition({ word: debouncedInput });
+                if (isCancelled) return;
+                setResult(response);
+            } catch (err: any) {
+                if (isCancelled) return;
+                setResult(null);
+                // Prefer simple error messages
+                setError(typeof err === "string" ? err : "Definition not found");
+            } finally {
+                if (!isCancelled) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        fetchData();
 
         return () => {
-            if (debounceRef.current) clearTimeout(debounceRef.current);
+            isCancelled = true;
         };
-    }, [input]);
-
-    async function lookupWord(word: string) {
-        setLoading(true);
-        setError(null);
-        try {
-            const response = await api.lookupDefinition({ word });
-            setResult(response);
-        } catch (err) {
-            console.error("Lookup failed:", err);
-            setResult(null);
-            setError(typeof err === "string" ? err : "Definition not found");
-        } finally {
-            setLoading(false);
-        }
-    }
+    }, [debouncedInput]);
 
     function extractFirstWord(text: string): string {
         return text.trim().split(/\s+/)[0].replace(/[^\w-]/g, "");
@@ -102,19 +114,21 @@ export function DefinitionWidget() {
     const copyToClipboard = async (text: string, index: number) => {
         try {
             await api.writeClipboardText(text);
-            setCopiedIndex(index);
-            setTimeout(() => setCopiedIndex(null), 2000);
-        } catch (err) {
-            console.error("Failed to copy:", err);
-            // Fallback to navigator if backend fails
+            updateCopyState(index);
+        } catch {
+            // Fallback to navigator
             try {
                 await navigator.clipboard.writeText(text);
-                setCopiedIndex(index);
-                setTimeout(() => setCopiedIndex(null), 2000);
-            } catch (e) {
-                console.error("Fallback copy failed:", e);
+                updateCopyState(index);
+            } catch {
+                // Ignore copy errors
             }
         }
+    };
+
+    const updateCopyState = (index: number) => {
+        setCopiedIndex(index);
+        setTimeout(() => setCopiedIndex(null), 2000);
     };
 
     return (
