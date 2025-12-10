@@ -13,6 +13,7 @@ pub struct WindowConfig {
     pub title: String,
     pub transparent: bool,
     pub resizable: bool,
+    pub decorations: bool,
 }
 
 impl WindowConfig {
@@ -23,6 +24,18 @@ impl WindowConfig {
             title: title.into(),
             transparent: true,
             resizable: false,
+            decorations: false,
+        }
+    }
+
+    pub fn resizable(width: f64, height: f64, title: impl Into<String>) -> Self {
+        Self {
+            width,
+            height,
+            title: title.into(),
+            transparent: false, // Standard windows are opaque
+            resizable: true,
+            decorations: true,  // Standard OS decorations
         }
     }
 }
@@ -31,15 +44,15 @@ impl WindowConfig {
 pub fn get_window_config(feature_id: &str) -> WindowConfig {
     match feature_id {
         "palette" => WindowConfig::new(550.0, 328.0, "Command Palette"),
-        "translator" => WindowConfig::new(700.0, 550.0, "Translator"),
-        "currency" => WindowConfig::new(500.0, 400.0, "Currency Converter"),
-        "unit_converter" => WindowConfig::new(500.0, 400.0, "Unit Converter"),
-        "time_converter" => WindowConfig::new(600.0, 500.0, "Time Converter"),
-        "definition" => WindowConfig::new(400.0, 500.0, "Definition"),
-        "text_analyser" => WindowConfig::new(600.0, 450.0, "Text Analyser"),
-        "settings" => WindowConfig::new(800.0, 600.0, "Settings"),
-        "clipboard" => WindowConfig::new(400.0, 300.0, "Clipboard History"),
-        _ => WindowConfig::new(500.0, 400.0, "Widget"), // Default fallback
+        "translator" => WindowConfig::resizable(700.0, 550.0, "Translator"),
+        "currency" => WindowConfig::resizable(500.0, 400.0, "Currency Converter"),
+        "unit_converter" => WindowConfig::resizable(500.0, 400.0, "Unit Converter"),
+        "time_converter" => WindowConfig::resizable(600.0, 500.0, "Time Converter"),
+        "definition" => WindowConfig::resizable(400.0, 500.0, "Definition"),
+        "text_analyser" => WindowConfig::resizable(600.0, 450.0, "Text Analyser"),
+        "settings" => WindowConfig::resizable(800.0, 600.0, "Settings"),
+        "clipboard" => WindowConfig::resizable(400.0, 300.0, "Clipboard History"),
+        _ => WindowConfig::resizable(500.0, 400.0, "Widget"), // Default fallback
     }
 }
 

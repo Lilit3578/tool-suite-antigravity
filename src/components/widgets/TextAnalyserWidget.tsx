@@ -1,23 +1,30 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../logic/api/tauri";
 import { Card } from "../ui/card";
 import { Separator } from "../ui/separator";
 import { Textarea } from "../ui/textarea";
 import { TextAnalysisResponse } from "../../logic/types";
 import { Clipboard, Check, Type, FileText, AlignLeft, Clock } from "lucide-react";
+import { useDebounce } from "../../hooks/useDebounce";
 
 export function TextAnalyserWidget() {
     const [input, setInput] = useState("");
     const [stats, setStats] = useState<TextAnalysisResponse | null>(null);
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
-    const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Debounce input to prevent analysis spam on every keystroke
+    const debouncedInput = useDebounce(input, 300);
 
     // Load text on open
     useEffect(() => {
+        let isMounted = true;
+
         const loadText = async () => {
             try {
                 // Try clipboard first (shortcut logic captures selection to clipboard)
                 const clipboardResult = await api.captureSelection("clipboard");
+                if (!isMounted) return;
+
                 if (clipboardResult.text && clipboardResult.text.trim()) {
                     setInput(clipboardResult.text);
                     return;
@@ -25,11 +32,13 @@ export function TextAnalyserWidget() {
 
                 // Fallback to active selection if clipboard empty
                 const result = await api.captureSelection("selection");
+                if (!isMounted) return;
+
                 if (result.text && result.text.trim()) {
-                    setInput(text => text || result.text);
+                    if (isMounted) setInput(result.text);
                 }
-            } catch (e) {
-                console.error("Failed to load text:", e);
+            } catch {
+                // Ignore errors during initial load
             }
         };
 
@@ -37,42 +46,58 @@ export function TextAnalyserWidget() {
 
         const handleFocus = () => loadText();
         window.addEventListener("focus", handleFocus);
-        return () => window.removeEventListener("focus", handleFocus);
+        return () => {
+            isMounted = false;
+            window.removeEventListener("focus", handleFocus);
+        };
     }, []);
 
-    // Analyze text with debounce
+    // Analyze text when debounced input changes
     useEffect(() => {
-        if (debounceRef.current) {
-            clearTimeout(debounceRef.current);
-        }
+        let isCancelled = false;
 
-        if (!input) {
-            setStats(null);
-            return;
-        }
-
-        debounceRef.current = setTimeout(async () => {
-            try {
-                const result = await api.analyzeText(input);
-                setStats(result);
-            } catch (e) {
-                console.error("Analysis failed:", e);
+        const analyze = async () => {
+            if (!debouncedInput) {
+                setStats(null);
+                return;
             }
-        }, 300);
+
+            try {
+                // Only analyze if there's content
+                const result = await api.analyzeText(debouncedInput);
+                if (!isCancelled) {
+                    setStats(result);
+                }
+            } catch {
+                // Ignore analysis errors
+            }
+        };
+
+        analyze();
 
         return () => {
-            if (debounceRef.current) clearTimeout(debounceRef.current);
+            isCancelled = true;
         };
-    }, [input]);
+    }, [debouncedInput]);
 
     const copyToClipboard = async (text: string, key: string) => {
         try {
-            await api.writeClipboardText(text);
-            setCopiedKey(key);
-            setTimeout(() => setCopiedKey(null), 2000);
-        } catch (err) {
-            console.error("Copy failed:", err);
+            await navigator.clipboard.writeText(text);
+            updateCopyState(key);
+        } catch {
+            // Fallback
+            try {
+                await navigator.clipboard.writeText(text);
+                updateCopyState(key);
+            } catch {
+                // Ignore
+            }
         }
+    };
+
+    const updateCopyState = (key: string) => {
+        setCopiedKey(key);
+        setTimeout(() => setCopiedKey(null), 2000);
     };
 
     const StatCard = ({
@@ -104,7 +129,7 @@ export function TextAnalyserWidget() {
                 className="opacity-0 group-hover:opacity-100 transition-all p-1.5 hover:bg-ink-100 rounded-md text-ink-400 hover:text-ink-600"
                 title="Copy value"
             >
-                {copiedKey === label ? <Check size={16} className="text-green-600" /> : <Clipboard size={16} />}
+                {copiedKey === label ? <Check size={16} className="text-green-600 animate-in zoom-in duration-200" /> : <Clipboard size={16} />}
             </button>
         </div>
     );
@@ -125,7 +150,7 @@ export function TextAnalyserWidget() {
                 />
             </div>
 
-            <div className="flex-1 overflow-y-auto min-h-0 pr-1">
+            <div className="flex-1 overflow-y-auto min-h-0 pr-1 space-y-4 scrollbar-thin scrollbar-thumb-ink-200 scrollbar-track-transparent">
                 {stats ? (
                     <div className="grid grid-cols-2 gap-3 pb-4">
                         <StatCard
@@ -171,17 +196,20 @@ export function TextAnalyserWidget() {
                                 onClick={() => copyToClipboard(stats.grapheme_count.toString(), "Graphemes")}
                                 className="opacity-0 group-hover:opacity-100 transition-all p-1.5 hover:bg-ink-100 rounded-md text-ink-400 hover:text-ink-600"
                             >
-                                {copiedKey === "Graphemes" ? <Check size={16} className="text-green-600" /> : <Clipboard size={16} />}
+                                {copiedKey === "Graphemes" ? <Check size={16} className="text-green-600 animate-in zoom-in duration-200" /> : <Clipboard size={16} />}
                             </button>
                         </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-ink-400 space-y-2 pb-8">
+                    <div className="flex flex-col items-center justify-center h-[200px] text-ink-400 space-y-2">
                         <span className="text-4xl text-ink-200">📊</span>
                         <p>Detailed statistics will appear here</p>
                     </div>
                 )}
             </div>
+
+            <Separator />
+
             <div className="flex-none flex justify-between items-center text-ink-400 text-xs pt-2 border-t border-ink-100">
                 <span>UAX #29 Compliant</span>
                 <span className="italic font-serif text-lg text-ink-300">by nullab</span>

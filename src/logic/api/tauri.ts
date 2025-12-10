@@ -19,6 +19,10 @@ import type {
     LookupDefinitionRequest,
     LookupDefinitionResponse,
     TextAnalysisResponse,
+    ParseUnitResponse,
+    GetUnitsResponse,
+    ConvertUnitsRequest,
+    ConvertUnitsResponse,
 } from "../types";
 
 
@@ -113,27 +117,6 @@ export const api = {
     },
 
     /**
-     * Clear all clipboard history
-     */
-    async clearClipboardHistory(): Promise<void> {
-        return invoke<void>("clear_clipboard_history");
-    },
-
-    /**
-     * Toggle clipboard monitoring on/off
-     */
-    async toggleClipboardMonitor(): Promise<boolean> {
-        return invoke<boolean>("toggle_clipboard_monitor");
-    },
-
-    /**
-     * Get clipboard monitor status
-     */
-    async getClipboardMonitorStatus(): Promise<boolean> {
-        return invoke<boolean>("get_clipboard_monitor_status");
-    },
-
-    /**
      * Get the currently active application name
      */
     async getActiveApp(): Promise<string> {
@@ -189,17 +172,33 @@ export const api = {
         return invoke<LookupDefinitionResponse>("lookup_definition", { request });
     },
 
-    /**
-     * Write text to clipboard (reliable backend method)
-     */
-    async writeClipboardText(text: string): Promise<void> {
-        return invoke<void>("write_clipboard_text", { text });
-    },
+
 
     /**
      * Analyze text stats (word count, reading time, etc.)
      */
     async analyzeText(text: string): Promise<TextAnalysisResponse> {
         return invoke<TextAnalysisResponse>("analyze_text", { request: { text } });
+    },
+
+    /**
+     * Parse text to extract unit and amount (backend registry)
+     */
+    async parseTextCommand(text: string): Promise<ParseUnitResponse> {
+        return invoke<ParseUnitResponse>("parse_text_command", { text });
+    },
+
+    /**
+     * Get all available units from backend registry
+     */
+    async getAllUnits(): Promise<GetUnitsResponse> {
+        return invoke<GetUnitsResponse>("get_all_units_command");
+    },
+
+    /**
+     * Convert units using backend registry
+     */
+    async convertUnitsCommand(request: ConvertUnitsRequest): Promise<ConvertUnitsResponse> {
+        return invoke<ConvertUnitsResponse>("convert_units_command", { request });
     },
 };

@@ -4,7 +4,7 @@
 
 use crate::shared::types::*;
 use crate::core::clipboard::{ClipboardHistory, ClipboardMonitor};
-use crate::shared::types::ClipboardHistoryItem;
+
 use crate::core::context;
 use crate::system::automation;
 use super::{FeatureSync, FeatureAsync};
@@ -23,51 +23,15 @@ impl FeatureSync for ClipboardFeature {
     }
     
     fn widget_commands(&self) -> Vec<CommandItem> {
-        vec![CommandItem {
-            id: "widget_clipboard".to_string(),
-            label: "Clipboard History".to_string(),
-            description: Some("View and manage clipboard history".to_string()),
-            action_type: None,
-            widget_type: Some("clipboard".to_string()),
-            category: Some(ContextCategory::General),
-        }]
+        // Clipboard History is no longer a standalone widget
+        // Backend tracking remains active, but no UI entry point
+        vec![]
     }
     
     fn action_commands(&self) -> Vec<CommandItem> {
-        vec![
-            CommandItem {
-                id: "show_clipboard_history".to_string(),
-                label: "Show Clipboard History".to_string(),
-                description: Some("Browse recently copied items".to_string()),
-                action_type: None,
-                widget_type: Some("clipboard".to_string()),
-                category: Some(ContextCategory::General),
-            },
-            CommandItem {
-                id: "pause_clipboard".to_string(),
-                label: "Pause History".to_string(),
-                description: Some("Pause clipboard monitoring".to_string()),
-                action_type: Some(ActionType::PauseClipboard),
-                widget_type: None,
-                category: Some(ContextCategory::General),
-            },
-            CommandItem {
-                id: "resume_clipboard".to_string(),
-                label: "Resume History".to_string(),
-                description: Some("Resume clipboard monitoring".to_string()),
-                action_type: Some(ActionType::ResumeClipboard),
-                widget_type: None,
-                category: Some(ContextCategory::General),
-            },
-            CommandItem {
-                id: "clear_clipboard_history".to_string(),
-                label: "Clear History".to_string(),
-                description: Some("Clear clipboard history".to_string()),
-                action_type: Some(ActionType::ClearClipboardHistory),
-                widget_type: None,
-                category: Some(ContextCategory::General),
-            },
-        ]
+        // Removed: "Show Clipboard History", "Clear History", "Pause/Resume"
+        // Backend commands still available via Tauri API for future use
+        vec![]
     }
     
     fn get_context_boost(&self, _captured_text: &str) -> HashMap<String, f64> {
@@ -82,14 +46,14 @@ impl FeatureAsync for ClipboardFeature {
         _action: &ActionType,
         _params: &serde_json::Value,
     ) -> crate::shared::error::AppResult<ExecuteActionResponse> {
-        Err(crate::shared::error::AppError::Feature("Clipboard feature doesn't support direct actions".to_string()))
+        Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string()))
     }
 }
 
 /// Get clipboard history items
 #[tauri::command]
 pub fn get_clipboard_history(history: tauri::State<ClipboardHistory>) -> crate::shared::error::AppResult<Vec<ClipboardHistoryItem>> {
-    Ok(history.get_items())
+    history.get_items()
 }
 
 /// Paste a clipboard item to the active application
@@ -101,7 +65,7 @@ pub async fn paste_clipboard_item(
     item_id: String,
 ) -> crate::shared::error::AppResult<()> {
     let item = history
-        .get_item_by_id(&item_id)
+        .get_item_by_id(&item_id)?
         .ok_or_else(|| crate::shared::error::AppError::Validation("Clipboard item not found".to_string()))?;
 
     println!("[PasteItem] Pasting item: {}", item.id);
@@ -163,8 +127,7 @@ pub async fn paste_clipboard_item(
 /// Clear all clipboard history
 #[tauri::command]
 pub fn clear_clipboard_history(history: tauri::State<ClipboardHistory>) -> crate::shared::error::AppResult<()> {
-    history.clear();
-    Ok(())
+    history.clear()
 }
 
 /// Toggle clipboard monitoring on/off

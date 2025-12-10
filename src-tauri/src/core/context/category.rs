@@ -153,111 +153,61 @@ pub fn detect_content_category(text: &str) -> Option<ContextCategory> {
 /// adding a match arm here, not touching detection or frontend logic.
 pub fn get_action_category(action: &ActionType) -> Option<ContextCategory> {
     match action {
-        // Translation actions → Text
-        ActionType::TranslateEn
-        | ActionType::TranslateZh
-        | ActionType::TranslateEs
-        | ActionType::TranslateFr
-        | ActionType::TranslateDe
-        | ActionType::TranslateAr
-        | ActionType::TranslatePt
-        | ActionType::TranslateRu
-        | ActionType::TranslateJa
-        | ActionType::TranslateHi
-        | ActionType::TranslateIt
-        | ActionType::TranslateNl
-        | ActionType::TranslatePl
-        | ActionType::TranslateTr
-        | ActionType::TranslateHy
-        | ActionType::TranslateFa
-        | ActionType::TranslateVi
-        | ActionType::TranslateId
-        | ActionType::TranslateKo
-        | ActionType::TranslateBn
-        | ActionType::TranslateUr
-        | ActionType::TranslateTh
-        | ActionType::TranslateSv
-        | ActionType::TranslateDa
-        | ActionType::TranslateFi
-        | ActionType::TranslateHu
-        | ActionType::FindSynonyms
-        | ActionType::FindAntonyms
-        | ActionType::BriefDefinition
-        | ActionType::CountWords
-        | ActionType::CountChars
-        | ActionType::ReadingTime => Some(ContextCategory::Text),
+        // Translation - NEW structured variant only
+        ActionType::Translate(_) => Some(ContextCategory::Text),
         
-        // Currency conversion actions → Currency
-        ActionType::ConvertUsd
-        | ActionType::ConvertEur
-        | ActionType::ConvertGbp
-        | ActionType::ConvertJpy
-        | ActionType::ConvertAud
-        | ActionType::ConvertCad
-        | ActionType::ConvertChf
-        | ActionType::ConvertCny
-        | ActionType::ConvertInr
-        | ActionType::ConvertMxn => Some(ContextCategory::Currency),
+        // Text analysis and definition - NEW structured variants only
+        ActionType::AnalyzeText(_)
+        | ActionType::DefinitionAction(_) => Some(ContextCategory::Text),
         
-        // Length conversion actions → Length
-        ActionType::ConvertToMM
-        | ActionType::ConvertToCM
-        | ActionType::ConvertToM
-        | ActionType::ConvertToKM
-        | ActionType::ConvertToIN
-        | ActionType::ConvertToFT
-        | ActionType::ConvertToYD
-        | ActionType::ConvertToMI => Some(ContextCategory::Length),
+        // Currency - NEW structured variant only
+        ActionType::ConvertCurrency(_) => Some(ContextCategory::Currency),
         
-        // Mass conversion actions → Mass
-        ActionType::ConvertToMG
-        | ActionType::ConvertToG
-        | ActionType::ConvertToKG
-        | ActionType::ConvertToOZ
-        | ActionType::ConvertToLB => Some(ContextCategory::Mass),
+        // Generic unit conversion (already structured)
+        ActionType::ConvertUnit { target } => get_unit_category(target),
         
-        // Volume conversion actions → Volume
-        ActionType::ConvertToML
-        | ActionType::ConvertToL
-        | ActionType::ConvertToFlOz
-        | ActionType::ConvertToCup
-        | ActionType::ConvertToPint
-        | ActionType::ConvertToQuart
-        | ActionType::ConvertToGal => Some(ContextCategory::Volume),
+        // Time conversion - NEW structured variant only
+        ActionType::ConvertTimeAction(_) => Some(ContextCategory::Time),
         
-        // Temperature conversion actions → Temperature
-        ActionType::ConvertToC
-        | ActionType::ConvertToF
-        | ActionType::ConvertToK => Some(ContextCategory::Temperature),
+
+    }
+}
+
+/// Helper to determine category from unit symbol
+fn get_unit_category(unit: &str) -> Option<ContextCategory> {
+    let u = unit.trim().to_lowercase();
+    match u.as_str() {
+        // Length
+        "mm" | "millimeter" | "millimeters" |
+        "cm" | "centimeter" | "centimeters" |
+        "m" | "meter" | "meters" |
+        "km" | "kilometer" | "kilometers" |
+        "in" | "inch" | "inches" |
+        "ft" | "foot" | "feet" |
+        "yd" | "yard" | "yards" |
+        "mi" | "mile" | "miles" => Some(ContextCategory::Length),
         
-        // Speed conversion actions → Speed
-        ActionType::ConvertToMS
-        | ActionType::ConvertToKMH
-        | ActionType::ConvertToMPH
-        | ActionType::ConvertToKnot => Some(ContextCategory::Speed),
+        // Mass
+        "mg" | "milligram" | "milligrams" |
+        "g" | "gram" | "grams" |
+        "kg" | "kilogram" | "kilograms" |
+        "oz" | "ounce" | "ounces" |
+        "lb" | "lbs" | "pound" | "pounds" => Some(ContextCategory::Mass),
         
-        // Cross-category conversions (Volume to Mass) → Mass
-        ActionType::ConvertVolToG
-        | ActionType::ConvertVolToKG
-        | ActionType::ConvertVolToOZ
-        | ActionType::ConvertVolToLB => Some(ContextCategory::Mass),
+        // Volume
+        "ml" | "milliliter" | "milliliters" |
+        "l" | "liter" | "liters" | "litre" | "litres" |
+        "fl-oz" | "floz" | "fluid ounce" | "fluid ounces" |
+        "cup" | "cups" |
+        "gal" | "gallon" | "gallons" => Some(ContextCategory::Volume),
         
-        // Cross-category conversions (Mass to Volume) → Volume
-        ActionType::ConvertMassToML
-        | ActionType::ConvertMassToL
-        | ActionType::ConvertMassToFlOz
-        | ActionType::ConvertMassToCup
-        | ActionType::ConvertMassToPint
-        | ActionType::ConvertMassToQuart
-        | ActionType::ConvertMassToGal => Some(ContextCategory::Volume),
+        // Temperature
+        "c" | "celsius" | "f" | "fahrenheit" | "k" | "kelvin" => Some(ContextCategory::Temperature),
         
-        // Time zone conversion → Time
-        ActionType::ConvertTime(_) => Some(ContextCategory::Time),
+        // Speed
+        "km/h" | "kmh" | "mph" | "kph" => Some(ContextCategory::Speed),
         
-        // System actions
-        ActionType::ClearClipboardHistory
-        | ActionType::PauseClipboard
-        | ActionType::ResumeClipboard => Some(ContextCategory::General),
+        _ => None,
     }
 }
 
@@ -307,20 +257,41 @@ mod tests {
 
     #[test]
     fn test_get_action_category_currency() {
-        assert_eq!(get_action_category(&ActionType::ConvertUsd), Some(ContextCategory::Currency));
-        assert_eq!(get_action_category(&ActionType::ConvertEur), Some(ContextCategory::Currency));
+        use crate::shared::types::CurrencyPayload;
+        assert_eq!(
+            get_action_category(&ActionType::ConvertCurrency(CurrencyPayload { target_currency: "USD".to_string() })), 
+            Some(ContextCategory::Currency)
+        );
+        assert_eq!(
+            get_action_category(&ActionType::ConvertCurrency(CurrencyPayload { target_currency: "EUR".to_string() })), 
+            Some(ContextCategory::Currency)
+        );
     }
 
     #[test]
     fn test_get_action_category_length() {
-        assert_eq!(get_action_category(&ActionType::ConvertToKM), Some(ContextCategory::Length));
-        assert_eq!(get_action_category(&ActionType::ConvertToM), Some(ContextCategory::Length));
+        use crate::shared::types::ActionType;
+        // Verify that generic unit conversion actions are correctly categorized
+        assert_eq!(
+            get_action_category(&ActionType::ConvertUnit { target: "km".to_string() }), 
+            Some(ContextCategory::Length)
+        );
+        assert_eq!(
+            get_action_category(&ActionType::ConvertUnit { target: "kg".to_string() }), 
+            Some(ContextCategory::Mass)
+        );
     }
 
     #[test]
     fn test_get_action_category_text() {
-        assert_eq!(get_action_category(&ActionType::TranslateEn), Some(ContextCategory::Text));
-        assert_eq!(get_action_category(&ActionType::TranslateIt), Some(ContextCategory::Text));
+        use crate::shared::types::TranslatePayload;
+        assert_eq!(
+            get_action_category(&ActionType::Translate(TranslatePayload { 
+                target_lang: "en".to_string(), 
+                source_lang: None
+            })), 
+            Some(ContextCategory::Text)
+        );
     }
 }
 

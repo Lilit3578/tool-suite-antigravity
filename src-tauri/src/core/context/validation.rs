@@ -163,12 +163,13 @@ fn get_valid_actions_for_category(category: &ContextCategory) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::types::{CurrencyPayload};
 
     #[test]
     fn test_validate_length_to_length() {
         assert!(validate_action(
             &ContextCategory::Length,
-            &ActionType::ConvertToKM
+            &ActionType::ConvertUnit { target: "km".to_string() }
         ).is_ok());
     }
 
@@ -176,23 +177,25 @@ mod tests {
     fn test_validate_length_to_currency() {
         assert!(validate_action(
             &ContextCategory::Length,
-            &ActionType::ConvertUsd
+            &ActionType::ConvertCurrency(CurrencyPayload { target_currency: "USD".to_string() })
         ).is_err());
     }
 
     #[test]
     fn test_validate_volume_to_mass() {
+        // Validation logic allows Volume -> Mass cross-category
         assert!(validate_action(
             &ContextCategory::Volume,
-            &ActionType::ConvertVolToG
+            &ActionType::ConvertUnit { target: "g".to_string() }
         ).is_ok());
     }
 
     #[test]
     fn test_validate_mass_to_volume() {
+        // Validation logic allows Mass -> Volume cross-category
         assert!(validate_action(
             &ContextCategory::Mass,
-            &ActionType::ConvertMassToL
+            &ActionType::ConvertUnit { target: "l".to_string() }
         ).is_ok());
     }
 
@@ -200,7 +203,7 @@ mod tests {
     fn test_validate_currency_to_currency() {
         assert!(validate_action(
             &ContextCategory::Currency,
-            &ActionType::ConvertUsd
+            &ActionType::ConvertCurrency(CurrencyPayload { target_currency: "USD".to_string() })
         ).is_ok());
     }
 }

@@ -63,6 +63,10 @@ impl Default for AppSettings {
     }
 }
 
+use keyring::Entry;
+
+const KEYRING_SERVICE: &str = "productivity-widgets";
+
 impl AppSettings {
     pub fn get_settings_path() -> Result<PathBuf, String> {
         ProjectDirs::from("com", "antigravity", "productivity-widgets")
@@ -73,20 +77,25 @@ impl AppSettings {
     pub async fn load() -> Result<Self, String> {
         let path = Self::get_settings_path()?;
         
-        if !path.exists() {
-            let settings = Self::default();
-            settings.save_to_disk().await?;
-            return Ok(settings);
-        }
+        let mut settings = if !path.exists() {
+            let s = Self::default();
+            // Don't save default here, wait for explicit save
+            s
+        } else {
+            let content = fs::read_to_string(&path).await
+                .map_err(|e| format!("Failed to read settings file: {}", e))?;
+            
+            serde_json::from_str(&content)
+                .map_err(|e| format!("Failed to parse settings: {}", e))?
+        };
 
-        let content = fs::read_to_string(&path).await
-            .map_err(|e| format!("Failed to read settings file: {}", e))?;
+        // Load secrets from keyring
+        settings.load_secrets_from_keyring().await?;
         
-        serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse settings: {}", e))
+        Ok(settings)
     }
 
-    /// Internal helper to save string to disk without emission
+    /// Helper to save string to disk without emission (masks secrets first)
     async fn save_to_disk(&self) -> Result<(), String> {
         let path = Self::get_settings_path()?;
         
@@ -95,21 +104,100 @@ impl AppSettings {
                 .map_err(|e| format!("Failed to create config directory: {}", e))?;
         }
 
-        let content = serde_json::to_string_pretty(self)
+        // Create a copy for disk storage with secrets removed
+        let mut disk_copy = self.clone();
+        disk_copy.clear_secrets();
+
+        let content = serde_json::to_string_pretty(&disk_copy)
             .map_err(|e| format!("Failed to serialize settings: {}", e))?;
         
         fs::write(&path, content).await
             .map_err(|e| format!("Failed to write settings file: {}", e))
     }
 
-    /// Save settings to disk and emit update event
+    /// Save settings (secrets to keyring, rest to disk) and emit update
     pub async fn save(&self, app: &AppHandle) -> Result<(), String> {
-        // Save to disk
+        // Save secrets to keyring first
+        self.save_secrets_to_keyring()?;
+
+        // Save stripped config to disk
         self.save_to_disk().await?;
             
-        // Emit update event
-        emit_event(app, AppEvent::SettingsUpdated(self.clone()));
+        // Emit update event (send FULL settings to app state listeners, they might need the keys)
+        // Wait, should we emit masked or full? 
+        // Backend listeners need full keys. Frontend listeners will get this event.
+        // If we emit full keys, frontend gets them.
+        // We should probably emit MASKED keys to frontend, but backend components typically reload from disk/keyring or have their own state.
+        // However, `emit_event` sends to frontend.
+        // Let's emit MASKED settings for security.
+        let masked = self.masked();
+        emit_event(app, AppEvent::SettingsUpdated(masked));
         
+        Ok(())
+    }
+
+    /// Return a copy of settings with secrets masked (for frontend/logging)
+    pub fn masked(&self) -> Self {
+        let mut copy = self.clone();
+        if !copy.api_keys.translation_key.is_empty() {
+            copy.api_keys.translation_key = "********".to_string();
+        }
+        if !copy.api_keys.google_translate_api_key.is_empty() {
+            copy.api_keys.google_translate_api_key = "********".to_string();
+        }
+        if !copy.api_keys.currency_api_key.is_empty() {
+            copy.api_keys.currency_api_key = "********".to_string();
+        }
+        copy
+    }
+
+    /// Clear secrets (for disk storage)
+    fn clear_secrets(&mut self) {
+        self.api_keys.translation_key = String::new();
+        self.api_keys.google_translate_api_key = String::new();
+        self.api_keys.currency_api_key = String::new();
+    }
+
+    async fn load_secrets_from_keyring(&mut self) -> Result<(), String> {
+        let get_secret = |key: &str| -> Option<String> {
+            match Entry::new(KEYRING_SERVICE, key) {
+                Ok(entry) => match entry.get_password() {
+                    Ok(pw) => Some(pw),
+                    Err(keyring::Error::NoEntry) => None,
+                    Err(e) => {
+                        eprintln!("[Settings] Keyring error for {}: {}", key, e);
+                        None
+                    }
+                },
+                Err(e) => {
+                    eprintln!("[Settings] Failed to access keyring for {}: {}", key, e);
+                    None
+                }
+            }
+        };
+
+        if let Some(s) = get_secret("translation_key") { self.api_keys.translation_key = s; }
+        if let Some(s) = get_secret("google_translate_api_key") { self.api_keys.google_translate_api_key = s; }
+        if let Some(s) = get_secret("currency_api_key") { self.api_keys.currency_api_key = s; }
+
+        Ok(())
+    }
+
+    fn save_secrets_to_keyring(&self) -> Result<(), String> {
+        let set_secret = |key: &str, value: &str| -> Result<(), String> {
+            if value.is_empty() || value == "********" {
+                return Ok(()); // Don't save empty/masked
+            }
+            let entry = Entry::new(KEYRING_SERVICE, key)
+                .map_err(|e| format!("Keyring init error: {}", e))?;
+            entry.set_password(value)
+                .map_err(|e| format!("Failed to save {} to keyring: {}", key, e))
+        };
+
+        set_secret("translation_key", &self.api_keys.translation_key)?;
+        set_secret("google_translate_api_key", &self.api_keys.google_translate_api_key)?;
+        set_secret("currency_api_key", &self.api_keys.currency_api_key)?;
+
         Ok(())
     }
 }

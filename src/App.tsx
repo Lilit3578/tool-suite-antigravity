@@ -10,7 +10,6 @@ import { TimeConverterWidget } from "./components/widgets/TimeConverterWidget";
 import { DefinitionWidget } from "./components/widgets/DefinitionWidget";
 import { TextAnalyserWidget } from "./components/widgets/TextAnalyserWidget";
 
-
 function App() {
   const { currentWidget, setCurrentWidget, setSettings } = useAppStore();
 

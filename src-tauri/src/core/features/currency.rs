@@ -3,7 +3,10 @@
 //! Provides currency conversion with 10 major currencies.
 
 use crate::core::context;
-use crate::features::currency::{service::CurrencyService, types as currency_types};
+pub mod service;
+pub mod types;
+use self::service::CurrencyService;
+use self::types as currency_types;
 use crate::shared::error::AppError;
 use crate::shared::types::*;
 use super::{FeatureAsync, FeatureSync};
@@ -32,30 +35,31 @@ impl FeatureSync for CurrencyFeature {
     }
     
     fn action_commands(&self) -> Vec<CommandItem> {
-        let conversions = vec![
-            ("convert_usd", "Convert to US Dollar (USD)", ActionType::ConvertUsd),
-            ("convert_eur", "Convert to Euro (EUR)", ActionType::ConvertEur),
-            ("convert_gbp", "Convert to British Pound (GBP)", ActionType::ConvertGbp),
-            ("convert_jpy", "Convert to Japanese Yen (JPY)", ActionType::ConvertJpy),
-            ("convert_aud", "Convert to Australian Dollar (AUD)", ActionType::ConvertAud),
-            ("convert_cad", "Convert to Canadian Dollar (CAD)", ActionType::ConvertCad),
-            ("convert_chf", "Convert to Swiss Franc (CHF)", ActionType::ConvertChf),
-            ("convert_cny", "Convert to Chinese Yuan (CNY)", ActionType::ConvertCny),
-            ("convert_inr", "Convert to Indian Rupee (INR)", ActionType::ConvertInr),
-            ("convert_mxn", "Convert to Mexican Peso (MXN)", ActionType::ConvertMxn),
+        // Phase 2: Generate commands dynamically from currency list
+        // This replaces 10 hardcoded CommandItem definitions
+        const CURRENCIES: &[(&str, &str)] = &[
+            ("USD", "US Dollar"),
+            ("EUR", "Euro"),
+            ("GBP", "British Pound"),
+            ("JPY", "Japanese Yen"),
+            ("AUD", "Australian Dollar"),
+            ("CAD", "Canadian Dollar"),
+            ("CHF", "Swiss Franc"),
+            ("CNY", "Chinese Yuan"),
+            ("INR", "Indian Rupee"),
+            ("MXN", "Mexican Peso"),
         ];
         
-        conversions
-            .into_iter()
-            .map(|(id, label, action_type)| CommandItem {
-                id: id.to_string(),
-                label: label.to_string(),
-                description: None,
-                action_type: Some(action_type),
-                widget_type: None,
-                category: None, // Will be assigned in get_all_command_items()
-            })
-            .collect()
+        CURRENCIES.iter().map(|(code, name)| CommandItem {
+            id: format!("convert_{}", code.to_lowercase()),
+            label: format!("Convert to {}", name),
+            description: None,
+            action_type: Some(ActionType::ConvertCurrency(CurrencyPayload {
+                target_currency: code.to_string(),
+            })),
+            widget_type: None,
+            category: None, // Will be assigned by get_action_category
+        }).collect()
     }
     
     fn get_context_boost(&self, captured_text: &str) -> HashMap<String, f64> {
@@ -92,18 +96,9 @@ impl FeatureAsync for CurrencyFeature {
         println!("!! CURRENCY EXECUTE CALLED with {:?}", action);
         println!("!! CURRENCY PARAMS: {}", params);
 
-        // Map known quick actions to explicit targets
+        // Phase 4: Only handle new ConvertCurrency variant
         let target_currency = match action {
-            ActionType::ConvertUsd => "USD",
-            ActionType::ConvertEur => "EUR",
-            ActionType::ConvertGbp => "GBP",
-            ActionType::ConvertJpy => "JPY",
-            ActionType::ConvertAud => "AUD",
-            ActionType::ConvertCad => "CAD",
-            ActionType::ConvertChf => "CHF",
-            ActionType::ConvertCny => "CNY",
-            ActionType::ConvertInr => "INR",
-            ActionType::ConvertMxn => "MXN",
+            ActionType::ConvertCurrency(payload) => payload.target_currency.as_str(),
             _ => {
                 println!("[CurrencyFeature] Currency ignoring action: {:?}", action);
                 return Err(crate::shared::error::AppError::Unknown(
@@ -149,7 +144,7 @@ impl FeatureAsync for CurrencyFeature {
         println!("[CurrencyFeature] DEBUG: convert_request = amount={}, from={}, to={}", convert_request.amount, convert_request.from, convert_request.to);
         
         // Execute conversion asynchronously
-        let service = CurrencyService::global()
+        let service = CurrencyService::global().await
             .map_err(|e| AppError::Unknown(e.to_string()))?;
         println!("[CurrencyFeature] DEBUG: CurrencyService acquired");
 
@@ -173,10 +168,11 @@ impl FeatureAsync for CurrencyFeature {
 }
 
 // Legacy function retained for backward compatibility; delegates to the new service.
+#[tauri::command]
 pub async fn convert_currency(
     request: ConvertCurrencyRequest,
 ) -> crate::shared::error::AppResult<currency_types::ConvertCurrencyResponse> {
-    let service = CurrencyService::global()
+    let service = CurrencyService::global().await
         .map_err(|e| AppError::Unknown(e.to_string()))?;
 
     // Try strict parse first; fallback to fuzzy parsing on failure

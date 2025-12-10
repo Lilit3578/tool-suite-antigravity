@@ -4,7 +4,7 @@ mod api;
 mod core;
 mod system;
 mod config;
-mod features;
+// mod features;  <-- REMOVED
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -34,11 +34,13 @@ pub fn run() {
             
             // Load settings
             // Load settings
-            let _settings = tauri::async_runtime::block_on(async {
-                shared::settings::AppSettings::load().await
-            }).unwrap_or_else(|e| {
-                eprintln!("Failed to load settings: {}", e);
-                shared::settings::AppSettings::default()
+            // Load settings asynchronously to avoid blocking main thread
+            tauri::async_runtime::spawn(async {
+                if let Err(e) = shared::settings::AppSettings::load().await {
+                    eprintln!("Failed to load settings: {}", e);
+                } else {
+                    println!("✅ Settings loaded");
+                }
             });
 
             // Initialize clipboard history and monitor
@@ -56,6 +58,9 @@ pub fn run() {
             
             // FIXED: Add debounce flag to prevent concurrent shortcut triggers
             let shortcut_debounce = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+            // Initialize clipboard state (for ignoring ghost copies)
+            let clipboard_state = core::clipboard::ClipboardState::new();
             
             // Store in app state for access from commands
             // CRITICAL: Must manage ALL state BEFORE accessing it in closures
@@ -65,16 +70,17 @@ pub fn run() {
             app.manage(last_active_app);
             app.manage(window_lock);
             app.manage(shortcut_debounce.clone());
+            app.manage(clipboard_state);
             
+
+
             // Start clipboard monitoring
             clipboard_monitor.start(app.handle().clone());
             println!("✅ Clipboard monitoring started");
 
             // Create tray menu (Command Palette as single access point)
             let palette_item = MenuItem::with_id(app, "palette", "Open Command Palette", true, None::<&str>)?;
-            let clipboard_item = MenuItem::with_id(app, "clipboard", "Clipboard History (5)", true, None::<&str>)?;
-            let toggle_monitor_item = MenuItem::with_id(app, "toggle_monitor", "⏸ Pause Monitoring", true, None::<&str>)?;
-            let clear_history_item = MenuItem::with_id(app, "clear_history", "Clear History", true, None::<&str>)?;
+
             let settings_item = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -84,9 +90,7 @@ pub fn run() {
                 &[
                     &palette_item,
                     &separator,
-                    &clipboard_item,
-                    &toggle_monitor_item,
-                    &clear_history_item,
+
                     &separator,
                     &settings_item,
                     &separator,
@@ -131,22 +135,7 @@ pub fn run() {
                                 }
                             });
                         }
-                        "toggle_monitor" => {
-                            if let Some(monitor) = app.try_state::<core::clipboard::monitor::ClipboardMonitor>() {
-                                let enabled = monitor.toggle();
-                                println!("Clipboard monitoring: {}", if enabled { "enabled" } else { "disabled" });
-                                
-                                // Update menu item text
-                                // Note: Tauri doesn't support dynamic menu text updates easily
-                                // This would require rebuilding the tray menu
-                            }
-                        }
-                        "clear_history" => {
-                            if let Some(history) = app.try_state::<core::clipboard::history::ClipboardHistory>() {
-                                history.clear();
-                                println!("Clipboard history cleared");
-                            }
-                        }
+
                         "settings" => {
                             // FIXED: Spawn async task instead of calling sync function
                             let app_handle = app.clone();
@@ -243,7 +232,11 @@ pub fn run() {
                             println!("🔵 [DEBUG] [Shortcut] STEP 2: Detecting text selection (BEFORE window creation)...");
                             println!("🔵 [DEBUG] [Shortcut] Original app before detection: {:?}", original_app_before_detection);
                             
-                            let (has_selection, _selected_text) = match system::automation::macos::detect_text_selection(&handle_clone).await {
+                            // Get clipboard state to pass ignore flag
+                            let clipboard_state = handle_clone.state::<core::clipboard::ClipboardState>();
+                            let ignore_flag = Some(clipboard_state.ignore_next.clone());
+
+                            let (has_selection, _selected_text) = match system::automation::macos::detect_text_selection(&handle_clone, ignore_flag).await {
                                 Ok(result) => {
                                     println!("🔵 [DEBUG] [Shortcut] ✓ Selection detection completed: has_selection={}", result.0);
                                     result
@@ -290,7 +283,7 @@ pub fn run() {
                                 } else {
                                     // Give window focus after showing
                                     if let Some(window) = handle_clone.get_webview_window("palette-window") {
-                                        std::thread::sleep(std::time::Duration::from_millis(150));
+                                        tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
                                         window.set_focus().ok();
                                     }
                                 }
@@ -370,20 +363,23 @@ pub fn run() {
             api::commands::settings::get_settings,
             api::commands::settings::save_settings,
             // Feature commands
-            features::translator::translate_text,
-            features::currency::convert_currency,
+            // Feature commands
+            core::features::translator::translate_text,
+            core::features::currency::convert_currency,
             core::features::clipboard::get_clipboard_history,
             core::features::clipboard::paste_clipboard_item,
-            core::features::clipboard::clear_clipboard_history,
-            core::features::clipboard::toggle_clipboard_monitor,
-            core::features::clipboard::get_clipboard_monitor_status,
+
             core::features::time_converter::convert_time,
             core::features::time_converter::get_timezones,
             core::features::time_converter::parse_time_from_selection,
             core::features::time_converter::get_system_timezone,
             core::features::definition::lookup_definition,
             core::features::text_analyser::analyze_text,
-            core::clipboard::write_clipboard_text,
+
+            // Unit Converter commands (new registry-based API)
+            core::features::unit_converter::parse_text_command,
+            core::features::unit_converter::get_all_units_command,
+            core::features::unit_converter::convert_units_command,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
@@ -424,7 +420,7 @@ async fn show_widget_window_async(
     let height = config.height as u32;
     let _title = config.title;
     let _transparent = config.transparent;
-    let _decorations = !config.resizable;
+    let _decorations = config.decorations;
     
     // Check if window already exists
     if let Some(window) = app.get_webview_window(&window_label) {
@@ -458,12 +454,15 @@ async fn show_widget_window_async(
             #[cfg(target_os = "macos")]
             {
                 system::window::nswindow::configure_window_for_fullscreen(&window).ok();
+                // FORCE CENTER every time it's shown
+                window.center().ok();
                 system::window::nswindow::show_window_over_fullscreen(&window).ok();
                 // That's it! Internal retry handles the rest
             }
             
             #[cfg(not(target_os = "macos"))]
             {
+                window.center().ok();
                 window.set_always_on_top(true).ok();
                 window.show().ok();
             }
@@ -524,7 +523,7 @@ fn show_widget_window_legacy(app: &tauri::AppHandle, widget: &str, has_selection
     let height = config.height as u32;
     let _title = config.title;
     let _transparent = config.transparent;
-    let _decorations = !config.resizable;
+    let _decorations = config.decorations;
     
     // Check if window already exists
     if let Some(window) = app.get_webview_window(&window_label) {
@@ -577,7 +576,11 @@ fn show_widget_window_legacy(app: &tauri::AppHandle, widget: &str, has_selection
                 window.show().ok();
             }
                     
-                    std::thread::sleep(std::time::Duration::from_millis(100));
+            let window_clone = window.clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                // Focus logic if needed
+            });
                             } else {
             println!("🔵 [DEBUG] [show_widget_window] Showing non-palette widget '{}'...", widget);
             
@@ -587,10 +590,12 @@ fn show_widget_window_legacy(app: &tauri::AppHandle, widget: &str, has_selection
                 match system::window::nswindow::show_window_over_fullscreen(&window) {
                     Ok(_) => {
                         println!("🔵 [DEBUG] [show_widget_window] ✓ Widget '{}' shown over fullscreen successfully", widget);
+                        window.center().ok(); // Force center
                     },
                         Err(e) => {
                         eprintln!("🔴 [DEBUG] [show_widget_window] ⚠️  Failed to show widget '{}' over fullscreen: {}", widget, e);
                     // Fallback
+                        window.center().ok();
                         window.set_always_on_top(true).ok();
                         window.show().ok();
                         window.set_focus().ok();
@@ -600,6 +605,7 @@ fn show_widget_window_legacy(app: &tauri::AppHandle, widget: &str, has_selection
             
             #[cfg(not(target_os = "macos"))]
             {
+                window.center().ok();
                 window.set_always_on_top(true).ok();
                 window.show().ok();
                 window.set_focus().ok();
@@ -619,19 +625,17 @@ async fn show_widget_window_create_new_async(app: &tauri::AppHandle, widget: &st
     let window_label = format!("{}-window", widget);
     
     // Define window dimensions
-    let (width, height, title, _transparent, decorations) = match widget {
-        "palette" => (550, 328, "Command Palette", true, false),
-        "clipboard" => (500, 400, "Clipboard History", false, false),
-        "translator" => (700, 550, "Translator", false, false),
-        "currency" => (500, 400, "Currency Converter", false, false),
-        "time_converter" => (600, 500, "Time Zone Converter", false, false),
-        "definition" => (400, 500, "Definition Lookup", false, false),
-        "settings" => (800, 600, "Settings", false, false),
-        _ => (600, 400, "Widget", false, false),
-    };
+    // Define window dimensions using centralized config
+    let config = config::get_window_config(widget);
+    let width = config.width;
+    let height = config.height;
+    let title = &config.title;
+    
+    // Legacy hardcoded match removed - now using config module exclusively
 
     // Create new window
-    let is_resizable = widget != "palette"; // Palette is non-resizable
+    let is_resizable = config.resizable;
+    let decorations = config.decorations;
     
     // Base builder with transparency for ALL windows initially
     // For palette, start invisible to prevent flash, then show after transparency is ready
@@ -649,9 +653,9 @@ async fn show_widget_window_create_new_async(app: &tauri::AppHandle, widget: &st
         .decorations(false)  // All windows start without decorations
         .skip_taskbar(true);  // Don't show in Dock/taskbar
     
-    // Add decorations back for non-palette widgets
+    // Add decorations back for non-palette widgets if configured
     if widget != "palette" && decorations {
-        builder = builder.decorations(true).transparent(false);
+        builder = builder.decorations(true).transparent(false).hidden_title(true);
     }
     
     // Add size constraints and floating properties for palette

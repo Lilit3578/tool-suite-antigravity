@@ -33,12 +33,12 @@ pub struct CurrencyService {
 }
 
 impl CurrencyService {
-    pub fn global() -> CurrencyResult<Arc<Self>> {
+    pub async fn global() -> CurrencyResult<Arc<Self>> {
         if let Some(existing) = SERVICE.get() {
             return Ok(existing.clone());
         }
 
-        let svc = Arc::new(Self::new()?);
+        let svc = Arc::new(Self::new().await?);
         svc.seed_from_disk()?;
         svc.spawn_refresh_if_stale();
         SERVICE
@@ -111,8 +111,8 @@ impl CurrencyService {
         })
     }
 
-    fn new() -> CurrencyResult<Self> {
-        let db_path = Self::db_path()?;
+    async fn new() -> CurrencyResult<Self> {
+        let db_path = Self::db_path().await?;
         let db = Database::create(db_path).map_err(|e| CommandError::SystemIO(e.to_string()))?;
         let http = Client::builder()
             .user_agent("tool-suite-antigravity/currency")
@@ -277,11 +277,11 @@ impl CurrencyService {
         Ok(CacheSnapshot { rates, last_updated })
     }
 
-    fn db_path() -> CurrencyResult<PathBuf> {
+    async fn db_path() -> CurrencyResult<PathBuf> {
         let proj_dirs = ProjectDirs::from("com", "Antigravity", "tool-suite-antigravity")
             .ok_or_else(|| CommandError::SystemIO("Unable to determine data directory".into()))?;
         let mut path = proj_dirs.data_dir().to_path_buf();
-        std::fs::create_dir_all(&path).map_err(|e| CommandError::SystemIO(e.to_string()))?;
+        tokio::fs::create_dir_all(&path).await.map_err(|e| CommandError::SystemIO(e.to_string()))?;
         path.push("currency_rates.redb");
         Ok(path)
     }

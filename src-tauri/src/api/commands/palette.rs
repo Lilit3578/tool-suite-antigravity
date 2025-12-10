@@ -56,6 +56,12 @@ pub async fn capture_selection(app: tauri::AppHandle, mode: Option<String>) -> A
         
         // Simulate Cmd+C to capture selection
         println!("🔵 [DEBUG] [CaptureSelection] Simulating Cmd+C...");
+        
+        // Set ignore flag to prevent ghost copy in history
+        let clipboard_state = app.state::<crate::core::clipboard::ClipboardState>();
+        clipboard_state.ignore_next.store(true, std::sync::atomic::Ordering::SeqCst);
+        println!("🔵 [DEBUG] [CaptureSelection] 🚩 Ignore flag set before manual copy");
+
         if let Err(e) = automation::simulate_cmd_c() {
             eprintln!("🔴 [DEBUG] [CaptureSelection] ✗ Failed to simulate Cmd+C: {}", e);
         } else {
@@ -165,6 +171,9 @@ pub async fn get_command_items(
 /// Execute an action
 #[tauri::command]
 pub async fn execute_action(request: ExecuteActionRequest) -> AppResult<ExecuteActionResponse> {
+    println!("🔵 [execute_action] Received action: {:?}", request.action_type);
+    println!("🔵 [execute_action] Params: {:?}", request.params);
+    
     // features::execute_feature_action currently returns Result<..., String>.
     // We need to map it.
     features::execute_feature_action(&request).await.map_err(AppError::from)

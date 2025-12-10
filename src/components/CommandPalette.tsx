@@ -1,9 +1,11 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { Languages, DollarSign, Settings, Zap, Clipboard } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+
 import { listen } from "@tauri-apps/api/event";
 import { api } from "../logic/api/tauri";
 import type { CommandItem, ClipboardItem } from "../logic/types";
+import { sortCommands } from "../logic/utils/ranking";
 import {
     Command,
     CommandEmpty,
@@ -37,11 +39,13 @@ export function CommandPalette() {
     const [isLoadingCommands, setIsLoadingCommands] = useState(true);
     const [isExecuting, setIsExecuting] = useState(false);
     const [executingActionId, setExecutingActionId] = useState<string | null>(null);
-    const [clipboardItems, setClipboardItems] = useState<ClipboardItem[]>([]);
+
 
     const actionRefs = useRef<Record<string, HTMLElement>>({});
     const inputRef = useRef<ComponentRef<typeof CommandInput>>(null);
+    const listRef = useRef<ComponentRef<typeof CommandList>>(null);
     const isPastingRef = useRef<boolean>(false);
+    const [clipboardItems, setClipboardItems] = useState<ClipboardItem[]>([]);
 
     // Load clipboard history on mount and when window gains focus
     useEffect(() => {
@@ -54,29 +58,29 @@ export function CommandPalette() {
             }
         };
 
-        // Load immediately on mount
         loadClipboardHistory();
 
-        // Listen for clipboard changes
         const setupListener = async () => {
-            const unlisten = await listen<ClipboardItem[]>('clipboard-changed', (event) => {
-                console.log("[CommandPalette] Clipboard history updated:", event.payload.length, "items");
-                setClipboardItems(event.payload);
+            const unlisten = await listen<ClipboardItem>('clipboard://updated', (event) => {
+                setClipboardItems(prev => {
+                    const newItem = event.payload;
+                    // Deduplicate
+                    const exists = prev.some(p => p.content === newItem.content);
+                    if (exists) return prev;
+                    return [newItem, ...prev].slice(0, 50);
+                });
             });
             return unlisten;
         };
 
         let unlistenFn: (() => void) | null = null;
-        setupListener().then(fn => {
-            unlistenFn = fn;
-        });
+        setupListener().then(fn => { unlistenFn = fn; });
 
-        return () => {
-            if (unlistenFn) {
-                unlistenFn();
-            }
-        };
+        return () => { if (unlistenFn) unlistenFn(); };
     }, []);
+
+
+
 
     // ✅ CRITICAL: Reset palette state on every window focus (when user opens palette)
     useEffect(() => {
@@ -97,13 +101,8 @@ export function CommandPalette() {
             setIsExecuting(false);
             setExecutingActionId(null);
 
-            // Fetch latest clipboard history when palette opens
-            try {
-                const history = await api.getClipboardHistory();
-                setClipboardItems(history);
-            } catch (e) {
-                console.error("Failed to refresh clipboard history:", e);
-            }
+            // Refresh clipboard history when opening
+            api.getClipboardHistory().then(setClipboardItems).catch(console.error);
 
             // Try to focus input
             requestAnimationFrame(() => {
@@ -312,61 +311,57 @@ export function CommandPalette() {
         };
     }, [popoverOpen]);
 
-    // Handle clipboard item paste
     const handlePasteClipboardItem = async (itemId: string) => {
-        // Prevent multiple simultaneous paste operations
-        if (isPastingRef.current) {
-            console.log('[CommandPalette] Paste already in progress, ignoring');
-            return;
-        }
-
+        if (isPastingRef.current) return;
         isPastingRef.current = true;
         try {
-            console.log('[CommandPalette] Pasting clipboard item:', itemId);
             await api.pasteClipboardItem(itemId);
-            // Hide palette after paste
             await getCurrentWindow().hide();
         } catch (error) {
-            console.error('[CommandPalette] Error pasting clipboard item:', error);
+            console.error('Error pasting clipboard item:', error);
         } finally {
-            // Reset after a delay to prevent rapid re-triggering
-            setTimeout(() => {
-                isPastingRef.current = false;
-            }, 500);
+            setTimeout(() => { isPastingRef.current = false; }, 500);
         }
     };
 
-    // Keyboard shortcuts: 1-5 for quick clipboard paste
+    // Keyboard shortcuts for clipboard items (1-5)
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            // Only handle if palette window is focused
-            if (!document.hasFocus()) return;
-            
-            // Don't trigger shortcuts if user is actively searching (has query text)
-            // This allows typing numbers in the search input
-            if (query.trim().length > 0) return;
-
-            // Handle numeric shortcuts 1-5 for clipboard items
+            if (!document.hasFocus() || query.trim().length > 0) return;
             const num = parseInt(e.key, 10);
             if (num >= 1 && num <= 5 && clipboardItems[num - 1]) {
                 e.preventDefault();
                 e.stopPropagation();
                 handlePasteClipboardItem(clipboardItems[num - 1].id);
-                return;
             }
         };
-
         window.addEventListener('keydown', handleKeyDown, true);
         return () => window.removeEventListener('keydown', handleKeyDown, true);
     }, [clipboardItems, query]);
 
-    // Filter and organize commands
-    const filteredCommands = query.trim()
-        ? commands.filter(cmd =>
-            cmd.label.toLowerCase().includes(query.toLowerCase()) ||
-            cmd.description?.toLowerCase().includes(query.toLowerCase())
-        )
-        : commands;
+    // Reset scroll position when query changes
+    useEffect(() => {
+        // Immediate reset attempt
+        if (listRef.current) {
+            listRef.current.scrollTop = 0;
+        }
+
+        // Ensure reset happens after layout updates
+        requestAnimationFrame(() => {
+            if (listRef.current) {
+                listRef.current.scrollTop = 0;
+            }
+        });
+    }, [query]);
+
+
+
+
+
+    // Filter and organize commands using Smart Ranking
+    const filteredCommands = useMemo(() => {
+        return sortCommands(commands, query, capturedText);
+    }, [commands, query, capturedText]);
 
     // Separate widgets and actions
     const allWidgets = filteredCommands.filter(c => c.widget_type);
@@ -440,6 +435,23 @@ export function CommandPalette() {
                 return;
             }
 
+            // Req #4: Conditional Limit Check
+            // "Processing Actions" -> Limit to 250 chars
+            const isProcessingAction =
+                actionType.type === 'Translate' ||
+                actionType.type === 'AnalyzeText' ||
+                actionType.type === 'DefinitionAction'; // Assuming definition is also processing-heavy
+
+            if (isProcessingAction && textToUse.length > 250) {
+                setPopoverContent("Can't do more than 250 characters, open widget instead.");
+                setIsError(true);
+                setIsExecuting(false);
+                setExecutingActionId(null);
+                setPopoverOpen(true);
+                // Do NOT auto-close error, let user read it
+                return;
+            }
+
             // Show optimistic loading state
             setPopoverContent("Processing...");
             setPopoverOpen(true);
@@ -458,10 +470,9 @@ export function CommandPalette() {
             // Record usage (don't await - fire and forget)
             api.recordCommandUsage(actionId).catch(e => console.error("Failed to record usage:", e));
 
-            setTimeout(() => {
-                setPopoverOpen(false);
-                setSelectedActionId(null);
-            }, 3000);
+            // Req #3: Prevent Auto-Close
+            // Removed setTimeout - popover stays open until user interacts or clicks outside
+
         } catch (e) {
             const errObj = e as any;
             const message =
@@ -486,20 +497,20 @@ export function CommandPalette() {
             setIsExecuting(false);
             setExecutingActionId(null);
             setPopoverOpen(true);
-
-            setTimeout(() => {
-                setPopoverOpen(false);
-                setSelectedActionId(null);
-            }, 3000);
+            // Error also prevented from auto-closing
         }
     }
 
     const getIcon = (command: CommandItem) => {
-        if (command.widget_type === 'translator' || (typeof command.action_type === 'string' && command.action_type.startsWith('translate_'))) {
+        // Determine icon based on widget type or action type
+        if (command.widget_type === 'translator' || (command.action_type && 'type' in command.action_type && command.action_type.type.startsWith('Translate'))) {
             return <Languages className="w-4 h-4" />;
         }
-        if (command.widget_type === 'currency' || (typeof command.action_type === 'string' && command.action_type.startsWith('convert_'))) {
+        if (command.widget_type === 'currency' || (command.action_type && 'type' in command.action_type && command.action_type.type.startsWith('Convert') && command.action_type.type.includes('Usd'))) {
             return <DollarSign className="w-4 h-4" />;
+        }
+        if (command.widget_type === 'unit_converter' || (command.action_type && 'type' in command.action_type && command.action_type.type === 'ConvertUnit')) {
+            return <DollarSign className="w-4 h-4" />; // Using DollarSign as a generic conversion icon for now
         }
         if (command.widget_type === 'settings') {
             return <Settings className="w-4 h-4" />;
@@ -519,6 +530,7 @@ export function CommandPalette() {
         >
             {/* Command Palette - let shadcn handle all styling */}
             <Command
+                shouldFilter={false}
                 style={{
                     position: 'absolute',
                     left: 0,
@@ -536,7 +548,7 @@ export function CommandPalette() {
                     autoFocus
                 />
 
-                <CommandList>
+                <CommandList ref={listRef}>
                     <CommandEmpty>
                         {isLoadingCommands ? (
                             <div className="flex flex-col items-center gap-2 py-4">
@@ -548,8 +560,10 @@ export function CommandPalette() {
                         )}
                     </CommandEmpty>
 
-                    {/* Clipboard History - Top 5 items */}
-                    {clipboardItems.length > 0 && (
+                    {(suggestedItems.length > 0 || widgetItems.length > 0 || actionItems.length > 0) && <CommandSeparator />}
+
+                    {/* Clipboard History - Hides when typing to show ranked results */}
+                    {(!query && clipboardItems.length > 0) && (
                         <CommandGroup>
                             <div cmdk-group-heading="">clipboard history</div>
                             {clipboardItems.slice(0, 5).map((item, index) => (
@@ -560,24 +574,18 @@ export function CommandPalette() {
                                     data-item-id={item.id}
                                     title={item.content || item.preview}
                                 >
-                                    <span className="text-xs text-muted-foreground mr-2 font-mono">
-                                        [{index + 1}]
-                                    </span>
+                                    <span className="text-xs text-muted-foreground mr-2 font-mono">[{index + 1}]</span>
                                     <Clipboard className="w-4 h-4 mr-2" />
                                     <div className="flex flex-col gap-0.5 flex-1 min-w-0">
                                         <span className="text-xs truncate">{item.preview}</span>
-                                        {item.source_app && (
-                                            <span className="text-[10px] text-muted-foreground">
-                                                from {item.source_app}
-                                            </span>
-                                        )}
+                                        {item.source_app && <span className="text-[10px] text-muted-foreground">from {item.source_app}</span>}
                                     </div>
                                 </CommandItemUI>
                             ))}
                         </CommandGroup>
                     )}
 
-                    {(clipboardItems.length > 0 && (suggestedItems.length > 0 || widgetItems.length > 0 || actionItems.length > 0)) && <CommandSeparator />}
+                    {(!query && clipboardItems.length > 0 && (suggestedItems.length > 0 || widgetItems.length > 0 || actionItems.length > 0)) && <CommandSeparator />}
 
                     {/* Suggested */}
                     {suggestedItems.length > 0 && (

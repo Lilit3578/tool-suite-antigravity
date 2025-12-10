@@ -64,56 +64,83 @@ impl ClipboardMonitor {
                         consecutive_errors = 0;
                         
                         if current_content.is_empty() {
-                            // Skip empty clipboard
                             BASE_POLL_INTERVAL_MS
                         } else {
-                            // Check if content has changed (with mutex recovery)
-                            let mut last = match last_content.lock() {
-                                Ok(guard) => guard,
-                                Err(poisoned) => {
-                                    eprintln!("[ClipboardMonitor] Content mutex poisoned, recovering...");
-                                    poisoned.into_inner()
+                            // Check for "Ghost Copy" flag
+                            let clipboard_state = app.state::<crate::core::clipboard::ClipboardState>();
+                            let should_ignore = clipboard_state.ignore_next.swap(false, Ordering::SeqCst);
+
+                            // 1. Check if content has changed (Cheap check)
+                            let has_changed = {
+                                let last = match last_content.lock() {
+                                    Ok(guard) => guard,
+                                    Err(poisoned) => poisoned.into_inner(),
+                                };
+                                match &*last {
+                                    Some(prev) => prev != &current_content,
+                                    None => true,
                                 }
                             };
-                            let has_changed = match &*last {
-                                Some(prev) => prev != &current_content,
-                                None => true,
-                            };
 
-                            if has_changed {
+                            if should_ignore {
+                                if has_changed {
+                                    println!("[ClipboardMonitor] 👻 Ghost copy detected and ignored.");
+                                    // Update last_content state so we don't process this as a new change later
+                                    {
+                                        let mut last = match last_content.lock() {
+                                            Ok(guard) => guard,
+                                            Err(poisoned) => poisoned.into_inner(),
+                                        };
+                                        *last = Some(current_content.clone());
+                                    }
+                                } else {
+                                    println!("[ClipboardMonitor] 👻 Ghost flag consumed but content unchanged.");
+                                }
+                                BASE_POLL_INTERVAL_MS
+                            } else if !has_changed {
+                                BASE_POLL_INTERVAL_MS
+                            } else {
                                 println!("[ClipboardMonitor] Detected clipboard change");
 
-                                // Update last content
-                                *last = Some(current_content.clone());
-                                // We need a clone for string operations
-                                let current_content_string = current_content.clone();
-                                drop(last);
-
-                                // Get the active app (source of the clipboard content)
+                                // 2. Heavy operations (only if changed)
                                 let active_app = crate::system::automation::macos::get_active_app().ok();
-                                
-                                // Create item and add to history
-                                // Currently only supporting Text via polling loop
-                                let item = crate::shared::types::ClipboardHistoryItem::new_text(
-                                    current_content_string.clone(), 
-                                    active_app.clone()
-                                );
-                                
-                                history.add_item(item.clone());
-                                
-                                // Emit event
-                                emit_event(&app, AppEvent::ClipboardUpdated(item));
-                                
-                                println!("✅ Clipboard updated: \"{}\"", 
-                                    if current_content_string.len() > 20 { 
-                                        format!("{}...", &current_content_string[0..20]) 
-                                    } else { 
-                                        current_content_string.clone() 
-                                    }
-                                );
+                                let current_content_string = current_content.clone();
+
+                                // 3. Update last_content state (to prevent re-processing)
+                                {
+                                    let mut last = match last_content.lock() {
+                                        Ok(guard) => guard,
+                                        Err(poisoned) => poisoned.into_inner(),
+                                    };
+                                    *last = Some(current_content.clone());
+                                }
+
+                                // 4. Check sensitivity
+                                if crate::core::clipboard::filter::is_sensitive(&current_content_string, active_app.as_deref()) {
+                                    println!("[ClipboardMonitor] 🔒 Sensitive content detected. Ignoring.");
+                                    BASE_POLL_INTERVAL_MS
+                                } else {
+                                    // 5. Add to history
+                                    let item = crate::shared::types::ClipboardHistoryItem::new_text(
+                                        current_content_string.clone(), 
+                                        active_app.clone()
+                                    );
+                                    
+                                    history.add_item(item.clone());
+                                    
+                                    emit_event(&app, AppEvent::ClipboardUpdated(item));
+                                    
+                                    println!("✅ Clipboard updated: \"{}\"", 
+                                        if current_content_string.len() > 20 { 
+                                            format!("{}...", &current_content_string[0..20]) 
+                                        } else { 
+                                            current_content_string.clone() 
+                                        }
+                                    );
+                                    
+                                    BASE_POLL_INTERVAL_MS
+                                }
                             }
-                            
-                            BASE_POLL_INTERVAL_MS
                         }
                     }
                     Err(e) => {
@@ -142,7 +169,8 @@ impl ClipboardMonitor {
                 };
 
                 // Single sleep point that respects backoff
-                tokio::time::sleep(Duration::from_millis(sleep_interval)).await;
+                let sleep_duration = Duration::from_millis(sleep_interval);
+                tokio::time::sleep(sleep_duration).await;
             }
         });
     }

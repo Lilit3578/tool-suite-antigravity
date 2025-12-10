@@ -1,15 +1,14 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { api } from "../../logic/api/tauri";
 import { Card } from "../ui/card";
 import { Combobox } from "../ui/combobox";
 import { useAppStore } from "../../logic/state/store";
 import type { TimezoneInfo } from "../../logic/types";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useDebounce } from "../../hooks/useDebounce";
 
 export function TimeConverterWidget() {
-    console.log('[TimeConverter] Component rendering...');
-
-    // Use Zustand store for state management
+    // Global State
     const {
         timeFromInput,
         setTimeFromInput,
@@ -26,329 +25,193 @@ export function TimeConverterWidget() {
         resetTimeConverter,
     } = useAppStore();
 
-    const [timezones, setTimezones] = React.useState<TimezoneInfo[]>([]);
-    const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-    const [isInitialized, setIsInitialized] = React.useState(false);
-    const [reinitKey, setReinitKey] = React.useState(0); // Force re-initialization
-    const [offsetDescription, setOffsetDescription] = React.useState<string>(""); // Smart city detection note
-    const [matchedKeyword, setMatchedKeyword] = React.useState<string | undefined>(undefined);  // NEW: Track matched keyword
+    // Local State
+    const [timezones, setTimezones] = useState<TimezoneInfo[]>([]);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [isInitialized, setIsInitialized] = useState(false);
+    const [offsetDescription, setOffsetDescription] = useState<string>("");
+    const [matchedKeyword, setMatchedKeyword] = useState<string | undefined>(undefined);
 
-    // Refs for tracking editing state to prevent circular updates
-    const isEditingFromRef = useRef(false);
-    const isEditingToRef = useRef(false);
-    const conversionIdRef = useRef(0);
-    const lastUserEditRef = useRef<"from" | "to" | null>(null);
+    // State to track which field controls the conversion direction
+    const [lastActiveField, setLastActiveField] = useState<"from" | "to" | null>(null);
 
-    // Initialize function that can be called multiple times
+    // Debounced values
+    const debouncedFrom = useDebounce(timeFromInput, 500);
+    const debouncedTo = useDebounce(timeToInput, 500);
+
+    // Initialize widget
     const initialize = useCallback(async () => {
-        console.log('[TimeConverter] 🔄 Initializing widget... (reinitKey:', reinitKey, ')');
-
         try {
-            // Reset state from previous session
-            resetTimeConverter();
             setErrorMessage(null);
-            setIsInitialized(false);
 
-            // Load timezones (only if not already loaded)
+            // 1. Load Timezones
             if (timezones.length === 0) {
-                console.log('[TimeConverter] Loading timezones...');
                 const tzList = await api.getTimezones();
-                console.log('[TimeConverter] Loaded timezones:', tzList.length);
                 setTimezones(tzList);
             }
 
-            // Auto-detect system timezone
+            // 2. Detect System Timezone
             const systemTz = await api.getSystemTimezone();
-            console.log('[TimeConverter] Detected system timezone:', systemTz);
             setTimeSourceTimezone(systemTz);
 
-            // Load and parse selected text
-            console.log('[TimeConverter] Attempting to capture selected text...');
-
-            // Try clipboard first (should have selection from shortcut handler)
-            const clipboardResult = await api.captureSelection("clipboard");
-            console.log('[TimeConverter] Clipboard result:', clipboardResult.text?.substring(0, 50));
-
+            // 3. Capture & Parse Selection
             let textToProcess: string | null = null;
 
+            // Try clipboard first
+            const clipboardResult = await api.captureSelection("clipboard");
             if (clipboardResult.text?.trim()) {
                 textToProcess = clipboardResult.text;
             } else {
                 // Fallback to selection
                 const selectionResult = await api.captureSelection("selection");
-                console.log('[TimeConverter] Selection result:', selectionResult.text?.substring(0, 50));
                 if (selectionResult.text?.trim()) {
                     textToProcess = selectionResult.text;
                 }
             }
 
             if (textToProcess) {
-                console.log('[TimeConverter] 📝 Processing text:', textToProcess);
                 const parsed = await api.parseTimeFromSelection(textToProcess);
-                console.log('[TimeConverter] 📊 Parsed result:', {
-                    time_input: parsed.time_input,
-                    source_timezone: parsed.source_timezone
-                });
 
-                // Only set if we got a meaningful time input (not empty or "now")
                 if (parsed.time_input && parsed.time_input.trim() && parsed.time_input !== "now") {
-                    console.log('[TimeConverter] ✅ Setting fromTime:', parsed.time_input);
-
-                    // Set source timezone FIRST if parsed
-                    const sourceTimezone = parsed.source_timezone || systemTz;
-                    console.log('[TimeConverter] 🌍 Source timezone will be:', sourceTimezone);
-
+                    // Update source timezone if detected
                     if (parsed.source_timezone) {
-                        console.log('[TimeConverter] ⚡ Setting source timezone from parsing:', parsed.source_timezone);
                         setTimeSourceTimezone(parsed.source_timezone);
                     }
 
-                    // Store matched keyword if available
                     if (parsed.matched_keyword) {
-                        console.log('[TimeConverter] 🏷️ Storing matched keyword:', parsed.matched_keyword);
                         setMatchedKeyword(parsed.matched_keyword);
                     }
 
-                    // Then set the time input
                     setTimeFromInput(parsed.time_input);
-
-                    // Mark as initialized
-                    setIsInitialized(true);
-
-                    // Trigger initial conversion after a short delay
-                    setTimeout(() => {
-                        lastUserEditRef.current = "from";
-                        const convId = ++conversionIdRef.current;
-                        convertFromToTo(parsed.time_input, sourceTimezone, timeTargetTimezone, convId);
-                    }, 100);
-                } else {
-                    console.log('[TimeConverter] ⚠️ No meaningful time input found, parsed:', parsed);
-                    setIsInitialized(true);
+                    // Explicitly set "from" as active to trigger initial conversion
+                    setLastActiveField("from");
                 }
-            } else {
-                console.log('[TimeConverter] ⚠️ No text to process');
-                setIsInitialized(true);
             }
+
+            setIsInitialized(true);
         } catch (error) {
-            console.error('[TimeConverter] ❌ Initialization failed:', error);
+            console.error('[TimeConverter] Initialization failed:', error);
             setErrorMessage(error instanceof Error ? error.message : "Failed to initialize widget");
             setIsInitialized(true);
         }
-    }, [reinitKey, timezones.length, timeTargetTimezone]); // Include dependencies
+    }, [timezones.length, setTimeSourceTimezone, setTimeFromInput, setTimezones, setMatchedKeyword, setTimeFromInput]);
 
-    // Listen for window focus/visibility to trigger re-initialization
+    // Initial Load & Focus Listener
     useEffect(() => {
-        let unlisten: (() => void) | undefined;
+        initialize();
 
         const setupListener = async () => {
             try {
                 const window = getCurrentWindow();
-                // Listen for window focus events
-                unlisten = await window.onFocusChanged(({ payload: focused }: { payload: boolean }) => {
+                await window.onFocusChanged(({ payload: focused }: { payload: boolean }) => {
                     if (focused) {
-                        console.log('[TimeConverter] 🪟 Window focused - triggering re-initialization');
-                        setReinitKey(prev => prev + 1);
+                        initialize();
                     }
                 });
-            } catch (error) {
-                console.error('[TimeConverter] Failed to setup focus listener:', error);
+            } catch (e) {
+                console.error("Failed to setup focus listener", e);
             }
         };
-
         setupListener();
 
         return () => {
-            if (unlisten) {
-                unlisten();
-            }
+            // Optional cleanup if we stored unlisten
+            resetTimeConverter();
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Run initialization whenever reinitKey changes
+    // Conversion Effect: FROM -> TO
     useEffect(() => {
-        console.log('[TimeConverter] 🔄 reinitKey changed to:', reinitKey);
-        initialize();
+        if (!isInitialized || lastActiveField !== "from") return;
 
-        // Cleanup on unmount
-        return () => {
-            console.log('[TimeConverter] Component unmounting, resetting state');
-            // Don't reset on every reinit, only on actual unmount
-            if (reinitKey === 0) {
-                resetTimeConverter();
+        const convert = async () => {
+            if (!debouncedFrom.trim()) {
+                setTimeToInput("");
+                setTimeRelativeOffset("");
+                setTimeDateChangeIndicator(null);
+                setOffsetDescription("");
+                return;
+            }
+
+            try {
+                const response = await api.convertTime({
+                    time_input: debouncedFrom,
+                    source_timezone: timeSourceTimezone,
+                    target_timezone: timeTargetTimezone,
+                    matched_keyword: matchedKeyword
+                });
+
+                setTimeToInput(response.target_time);
+                // Also normalize FROM input if needed (e.g. formatting), but be careful not to override user typing
+                // setTimeFromInput(response.source_time); // Only if we want auto-formatting
+
+                setTimeRelativeOffset(response.relative_offset);
+                setTimeDateChangeIndicator(response.date_change_indicator || null);
+                setOffsetDescription(response.offset_description || "");
+                setErrorMessage(null);
+            } catch (error) {
+                setErrorMessage("Conversion failed");
+                console.error(error);
             }
         };
-    }, [reinitKey, initialize]);
 
-    // Auto-convert FROM → TO with debounce
+        convert();
+    }, [debouncedFrom, timeSourceTimezone, timeTargetTimezone, isInitialized, lastActiveField, matchedKeyword, setTimeToInput, setTimeRelativeOffset, setTimeDateChangeIndicator, setOffsetDescription]);
+
+    // Conversion Effect: TO -> FROM
     useEffect(() => {
-        if (!isInitialized) {
-            console.log('[TimeConverter] FROM→TO skipped - not initialized yet');
-            return;
-        }
+        if (!isInitialized || lastActiveField !== "to") return;
 
-        const convId = ++conversionIdRef.current;
-        console.log(`[TimeConverter] FROM→TO effect triggered [${convId}]`, {
-            timeFromInput,
-            timeSourceTimezone,
-            timeTargetTimezone,
-            lastUserEdit: lastUserEditRef.current,
-        });
-
-        // Skip if user is editing TO field
-        if (isEditingToRef.current || lastUserEditRef.current === "to") {
-            console.log(`[TimeConverter] FROM→TO skipped [${convId}] - user editing TO field`);
-            return;
-        }
-
-        const timeout = setTimeout(() => {
-            if (!timeFromInput.trim()) {
-                console.log(`[TimeConverter] FROM→TO cleared [${convId}] - empty input`);
+        const convert = async () => {
+            if (!debouncedTo.trim()) {
+                setTimeFromInput("");
                 setTimeRelativeOffset("");
                 setTimeDateChangeIndicator(null);
-                setTimeToInput("");
+                setOffsetDescription("");
                 return;
             }
 
-            console.log(`[TimeConverter] FROM→TO conversion starting [${convId}]`);
-            convertFromToTo(timeFromInput, timeSourceTimezone, timeTargetTimezone, convId);
-        }, 500);
+            try {
+                const response = await api.convertTime({
+                    time_input: debouncedTo, // We are treating TO input as the time to convert
+                    source_timezone: timeTargetTimezone, // Swap source/target for reverse calc
+                    target_timezone: timeSourceTimezone,
+                    matched_keyword: undefined // Keyword usually applies to source, clear or handle appropriately
+                });
 
-        return () => clearTimeout(timeout);
-    }, [timeFromInput, timeSourceTimezone, timeTargetTimezone, isInitialized]);
+                setTimeFromInput(response.target_time); // result is the "target" of the reverse conversion
 
-    // Auto-convert TO → FROM with debounce (only when user manually edits TO field)
-    useEffect(() => {
-        if (!isInitialized) {
-            console.log('[TimeConverter] TO→FROM skipped - not initialized yet');
-            return;
-        }
-
-        const convId = ++conversionIdRef.current;
-        console.log(`[TimeConverter] TO→FROM effect triggered [${convId}]`, {
-            timeToInput,
-            lastUserEdit: lastUserEditRef.current,
-        });
-
-        // Only run if user manually edited TO field
-        if (isEditingFromRef.current || lastUserEditRef.current !== "to") {
-            console.log(`[TimeConverter] TO→FROM skipped [${convId}] - not manual TO edit`);
-            return;
-        }
-
-        const timeout = setTimeout(() => {
-            if (!timeToInput.trim()) {
-                console.log(`[TimeConverter] TO→FROM cleared [${convId}] - empty input`);
-                setTimeRelativeOffset("");
-                setTimeDateChangeIndicator(null);
-                setTimeFromInput("");
-                return;
+                setTimeRelativeOffset(response.relative_offset);
+                setTimeDateChangeIndicator(response.date_change_indicator || null);
+                setOffsetDescription(response.offset_description || "");
+                setErrorMessage(null);
+            } catch (error) {
+                setErrorMessage("Conversion failed");
+                console.error(error);
             }
+        };
 
-            console.log(`[TimeConverter] TO→FROM conversion starting [${convId}]`);
-            convertToToFrom(timeToInput, timeTargetTimezone, timeSourceTimezone, convId);
-        }, 500);
+        convert();
+    }, [debouncedTo, timeSourceTimezone, timeTargetTimezone, isInitialized, lastActiveField, setTimeFromInput, setTimeRelativeOffset, setTimeDateChangeIndicator, setOffsetDescription]);
 
-        return () => clearTimeout(timeout);
-    }, [timeToInput, timeSourceTimezone, timeTargetTimezone, isInitialized]);
+    // Handle Input Changes
+    const handleFromChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setLastActiveField("from");
+        setTimeFromInput(e.target.value);
+    };
 
-    async function convertFromToTo(input: string, source: string, target: string, convId: number) {
-        console.log(`[TimeConverter] FROM→TO API call [${convId}]`, { input, source, target });
+    const handleToChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setLastActiveField("to");
+        setTimeToInput(e.target.value);
+    };
 
-        try {
-            const response = await api.convertTime({
-                time_input: input,
-                target_timezone: target,
-                source_timezone: source,
-                matched_keyword: matchedKeyword,  // Pass matched keyword
-            });
-
-            console.log(`[TimeConverter] FROM→TO response [${convId}]:`, response);
-            console.log(`[TimeConverter] 📝 offsetDescription:`, response.offset_description);
-
-            setTimeRelativeOffset(response.relative_offset);
-            setTimeDateChangeIndicator(response.date_change_indicator || null);
-            setOffsetDescription(response.offset_description || "");
-            setErrorMessage(null);
-
-            // Update FROM field with formatted time (with date) when user is not editing
-            if (!isEditingFromRef.current) {
-                setTimeFromInput(response.source_time);
-            }
-
-            // Update TO field with converted time
-            if (!isEditingToRef.current) {
-                setTimeToInput(response.target_time);
-            }
-        } catch (error) {
-            console.error(`[TimeConverter] FROM→TO conversion failed [${convId}]:`, error);
-            const errorMsg = error instanceof Error ? error.message : "Conversion failed";
-            setErrorMessage(errorMsg);
-            setTimeRelativeOffset("");
-            setTimeDateChangeIndicator(null);
-            setOffsetDescription("");
-            if (!isEditingToRef.current) {
-                setTimeToInput("");
-            }
-        }
-    }
-
-    async function convertToToFrom(input: string, source: string, target: string, convId: number) {
-        console.log(`[TimeConverter] TO→FROM API call [${convId}]`, { input, source, target });
-
-        try {
-            const response = await api.convertTime({
-                time_input: input,
-                target_timezone: target,
-                source_timezone: source,
-                matched_keyword: matchedKeyword,  // Pass matched keyword
-            });
-
-            console.log(`[TimeConverter] TO→FROM response [${convId}]:`, response);
-
-            setTimeRelativeOffset(response.relative_offset);
-            setTimeDateChangeIndicator(response.date_change_indicator || null);
-            setOffsetDescription(response.offset_description || "");
-            setErrorMessage(null);
-
-            // Update TO field with formatted time
-            if (!isEditingToRef.current) {
-                setTimeToInput(response.source_time);
-            }
-
-            // Update FROM field with converted time
-            if (!isEditingFromRef.current) {
-                setTimeFromInput(response.target_time);
-            }
-        } catch (error) {
-            console.error(`[TimeConverter] TO→FROM conversion failed [${convId}]:`, error);
-            const errorMsg = error instanceof Error ? error.message : "Conversion failed";
-            setErrorMessage(errorMsg);
-            setTimeRelativeOffset("");
-            setTimeDateChangeIndicator(null);
-            setOffsetDescription("");
-            if (!isEditingFromRef.current) {
-                setTimeFromInput("");
-            }
-        }
-    }
-
-    // Create timezone display options with keywords for search
+    // Prepare timezone options
     const timezoneOptions = timezones.map(tz => ({
         value: tz.iana_id,
         label: tz.label,
-        keywords: tz.keywords // Include keywords for search
+        keywords: tz.keywords
     }));
-
-    // Debug: log current timezone values
-    console.log('[TimeConverter] 📊 Current state:', {
-        timeSourceTimezone,
-        timeTargetTimezone,
-        timeFromInput,
-        timeToInput,
-        offsetDescription,
-        isInitialized,
-        reinitKey
-    });
 
     return (
         <Card className="w-full bg-white border border-ink-400 rounded-xl p-4 flex flex-col gap-2">
@@ -371,18 +234,18 @@ export function TimeConverterWidget() {
                 {/* Timezone pill */}
                 <div className="px-2 py-1 bg-ink-1000 text-ink-0 rounded-md border border-ink-400 flex items-center gap-1 text-sm font-normal">
                     <Combobox
-                        key={`from-${timeSourceTimezone}-${reinitKey}`}
                         value={timezoneOptions.find(tz => tz.value === timeSourceTimezone)?.label || timeSourceTimezone}
                         onChange={(val) => {
                             const tz = timezoneOptions.find(t => t.label === val);
                             if (tz) {
-                                console.log('[TimeConverter] Source timezone changed:', tz.value);
                                 setTimeSourceTimezone(tz.value);
+                                // If user changes TZ, trigger update based on current active field or default to re-converting FROM
+                                if (lastActiveField !== "to") setLastActiveField("from");
                             }
                         }}
                         items={timezoneOptions.map(tz => ({
                             label: tz.label,
-                            searchText: `${tz.label} ${tz.keywords}` // Combine label and keywords for search
+                            searchText: `${tz.label} ${tz.keywords}`
                         }))}
                         placeholder="Select timezone"
                         className="w-[200px] text-ink-0"
@@ -393,19 +256,7 @@ export function TimeConverterWidget() {
                 <input
                     type="text"
                     value={timeFromInput}
-                    onChange={(e) => {
-                        const newValue = e.target.value;
-                        console.log('[TimeConverter] FROM field onChange:', newValue);
-                        isEditingFromRef.current = true;
-                        lastUserEditRef.current = "from";
-                        setTimeFromInput(newValue);
-                        setTimeout(() => {
-                            isEditingFromRef.current = false;
-                        }, 100);
-                    }}
-                    onBlur={() => {
-                        isEditingFromRef.current = false;
-                    }}
+                    onChange={handleFromChange}
                     className="flex-1 text-right bg-transparent border-none outline-none text-[14px] font-normal text-ink-1000"
                     placeholder="3pm, tomorrow at 5pm"
                 />
@@ -416,18 +267,18 @@ export function TimeConverterWidget() {
                 {/* Timezone pill */}
                 <div className="px-2 py-1 bg-ink-1000 text-ink-0 rounded-md border border-ink-400 flex items-center gap-1 text-sm font-normal">
                     <Combobox
-                        key={`to-${timeTargetTimezone}-${reinitKey}`}
                         value={timezoneOptions.find(tz => tz.value === timeTargetTimezone)?.label || timeTargetTimezone}
                         onChange={(val) => {
                             const tz = timezoneOptions.find(t => t.label === val);
                             if (tz) {
-                                console.log('[TimeConverter] Target timezone changed:', tz.value);
                                 setTimeTargetTimezone(tz.value);
+                                // If user changes Target TZ, usually implies we want to re-convert FROM -> TO
+                                setLastActiveField("from");
                             }
                         }}
                         items={timezoneOptions.map(tz => ({
                             label: tz.label,
-                            searchText: `${tz.label} ${tz.keywords}` // Combine label and keywords for search
+                            searchText: `${tz.label} ${tz.keywords}`
                         }))}
                         placeholder="Select timezone"
                         className="w-[200px] text-ink-0"
@@ -438,21 +289,9 @@ export function TimeConverterWidget() {
                 <input
                     type="text"
                     value={timeToInput}
-                    onChange={(e) => {
-                        const newValue = e.target.value;
-                        console.log('[TimeConverter] TO field onChange:', newValue);
-                        isEditingToRef.current = true;
-                        lastUserEditRef.current = "to";
-                        setTimeToInput(newValue);
-                        setTimeout(() => {
-                            isEditingToRef.current = false;
-                        }, 100);
-                    }}
-                    onBlur={() => {
-                        isEditingToRef.current = false;
-                    }}
+                    onChange={handleToChange}
                     className="flex-1 text-right bg-transparent border-none outline-none text-[14px] font-normal text-ink-1000"
-                    placeholder="3pm, tomorrow at 5pm"
+                    placeholder="Output time"
                 />
             </div>
 
@@ -470,9 +309,8 @@ export function TimeConverterWidget() {
             {offsetDescription && offsetDescription.includes('•') && (
                 <div className="text-center text-ink-600 text-[11px] font-normal italic">
                     {(() => {
-                        const note = offsetDescription.split('•')[1]?.trim();
-                        console.log('[TimeConverter] 🏙️ Displaying Smart City note:', note);
-                        return note;
+                        const parts = offsetDescription.split('•');
+                        return parts.length > 1 ? parts[1].trim() : null;
                     })()}
                 </div>
             )}

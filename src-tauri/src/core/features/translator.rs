@@ -1,6 +1,8 @@
 //! Translator feature
 //!
 //! Provides translation functionality with 26 language support.
+pub mod service;
+pub mod types;
 
 use crate::shared::types::*;
 use crate::shared::settings::AppSettings;
@@ -28,36 +30,50 @@ impl FeatureSync for TranslatorFeature {
         }]
     }
     
+    
     fn action_commands(&self) -> Vec<CommandItem> {
-        // 26 translation language actions
-        vec![
-            CommandItem { id: "translate_en".to_string(), label: "Translate to English".to_string(), description: Some("Translate selected text to English".to_string()), action_type: Some(ActionType::TranslateEn), widget_type: None, category: None },
-            CommandItem { id: "translate_zh".to_string(), label: "Translate to Chinese".to_string(), description: Some("Translate selected text to Chinese".to_string()), action_type: Some(ActionType::TranslateZh), widget_type: None, category: None },
-            CommandItem { id: "translate_es".to_string(), label: "Translate to Spanish".to_string(), description: Some("Translate selected text to Spanish".to_string()), action_type: Some(ActionType::TranslateEs), widget_type: None, category: None },
-            CommandItem { id: "translate_fr".to_string(), label: "Translate to French".to_string(), description: Some("Translate selected text to French".to_string()), action_type: Some(ActionType::TranslateFr), widget_type: None, category: None },
-            CommandItem { id: "translate_de".to_string(), label: "Translate to German".to_string(), description: Some("Translate selected text to German".to_string()), action_type: Some(ActionType::TranslateDe), widget_type: None, category: None },
-            CommandItem { id: "translate_ar".to_string(), label: "Translate to Arabic".to_string(), description: Some("Translate selected text to Arabic".to_string()), action_type: Some(ActionType::TranslateAr), widget_type: None, category: None },
-            CommandItem { id: "translate_pt".to_string(), label: "Translate to Portuguese".to_string(), description: Some("Translate selected text to Portuguese".to_string()), action_type: Some(ActionType::TranslatePt), widget_type: None, category: None },
-            CommandItem { id: "translate_ru".to_string(), label: "Translate to Russian".to_string(), description: Some("Translate selected text to Russian".to_string()), action_type: Some(ActionType::TranslateRu), widget_type: None, category: None },
-            CommandItem { id: "translate_ja".to_string(), label: "Translate to Japanese".to_string(), description: Some("Translate selected text to Japanese".to_string()), action_type: Some(ActionType::TranslateJa), widget_type: None, category: None },
-            CommandItem { id: "translate_hi".to_string(), label: "Translate to Hindi".to_string(), description: Some("Translate selected text to Hindi".to_string()), action_type: Some(ActionType::TranslateHi), widget_type: None, category: None },
-            CommandItem { id: "translate_it".to_string(), label: "Translate to Italian".to_string(), description: Some("Translate selected text to Italian".to_string()), action_type: Some(ActionType::TranslateIt), widget_type: None, category: None },
-            CommandItem { id: "translate_nl".to_string(), label: "Translate to Dutch".to_string(), description: Some("Translate selected text to Dutch".to_string()), action_type: Some(ActionType::TranslateNl), widget_type: None, category: None },
-            CommandItem { id: "translate_pl".to_string(), label: "Translate to Polish".to_string(), description: Some("Translate selected text to Polish".to_string()), action_type: Some(ActionType::TranslatePl), widget_type: None, category: None },
-            CommandItem { id: "translate_tr".to_string(), label: "Translate to Turkish".to_string(), description: Some("Translate selected text to Turkish".to_string()), action_type: Some(ActionType::TranslateTr), widget_type: None, category: None },
-            CommandItem { id: "translate_hy".to_string(), label: "Translate to Armenian".to_string(), description: Some("Translate selected text to Armenian".to_string()), action_type: Some(ActionType::TranslateHy), widget_type: None, category: None },
-            CommandItem { id: "translate_fa".to_string(), label: "Translate to Persian".to_string(), description: Some("Translate selected text to Persian".to_string()), action_type: Some(ActionType::TranslateFa), widget_type: None, category: None },
-            CommandItem { id: "translate_vi".to_string(), label: "Translate to Vietnamese".to_string(), description: Some("Translate selected text to Vietnamese".to_string()), action_type: Some(ActionType::TranslateVi), widget_type: None, category: None },
-            CommandItem { id: "translate_id".to_string(), label: "Translate to Indonesian".to_string(), description: Some("Translate selected text to Indonesian".to_string()), action_type: Some(ActionType::TranslateId), widget_type: None, category: None },
-            CommandItem { id: "translate_ko".to_string(), label: "Translate to Korean".to_string(), description: Some("Translate selected text to Korean".to_string()), action_type: Some(ActionType::TranslateKo), widget_type: None, category: None },
-            CommandItem { id: "translate_bn".to_string(), label: "Translate to Bengali".to_string(), description: Some("Translate selected text to Bengali".to_string()), action_type: Some(ActionType::TranslateBn), widget_type: None, category: None },
-            CommandItem { id: "translate_ur".to_string(), label: "Translate to Urdu".to_string(), description: Some("Translate selected text to Urdu".to_string()), action_type: Some(ActionType::TranslateUr), widget_type: None, category: None },
-            CommandItem { id: "translate_th".to_string(), label: "Translate to Thai".to_string(), description: Some("Translate selected text to Thai".to_string()), action_type: Some(ActionType::TranslateTh), widget_type: None, category: None },
-            CommandItem { id: "translate_sv".to_string(), label: "Translate to Swedish".to_string(), description: Some("Translate selected text to Swedish".to_string()), action_type: Some(ActionType::TranslateSv), widget_type: None, category: None },
-            CommandItem { id: "translate_da".to_string(), label: "Translate to Danish".to_string(), description: Some("Translate selected text to Danish".to_string()), action_type: Some(ActionType::TranslateDa), widget_type: None, category: None },
-            CommandItem { id: "translate_fi".to_string(), label: "Translate to Finnish".to_string(), description: Some("Translate selected text to Finnish".to_string()), action_type: Some(ActionType::TranslateFi), widget_type: None, category: None },
-            CommandItem { id: "translate_hu".to_string(), label: "Translate to Hungarian".to_string(), description: Some("Translate selected text to Hungarian".to_string()), action_type: Some(ActionType::TranslateHu), widget_type: None, category: None },
-        ]
+        // Phase 1: Generate commands dynamically from language list
+        // This replaces 26 hardcoded CommandItem definitions
+        const LANGUAGES: &[(&str, &str)] = &[
+            ("en", "English"),
+            ("zh", "Chinese"),
+            ("es", "Spanish"),
+            ("fr", "French"),
+            ("de", "German"),
+            ("ar", "Arabic"),
+            ("pt", "Portuguese"),
+            ("ru", "Russian"),
+            ("ja", "Japanese"),
+            ("hi", "Hindi"),
+            ("it", "Italian"),
+            ("nl", "Dutch"),
+            ("pl", "Polish"),
+            ("tr", "Turkish"),
+            ("hy", "Armenian"),
+            ("fa", "Persian"),
+            ("vi", "Vietnamese"),
+            ("id", "Indonesian"),
+            ("ko", "Korean"),
+            ("bn", "Bengali"),
+            ("ur", "Urdu"),
+            ("th", "Thai"),
+            ("sv", "Swedish"),
+            ("da", "Danish"),
+            ("fi", "Finnish"),
+            ("hu", "Hungarian"),
+        ];
+        
+        LANGUAGES.iter().map(|(code, name)| CommandItem {
+            id: format!("translate_{}", code),
+            label: format!("Translate to {}", name),
+            description: None,
+            action_type: Some(ActionType::Translate(TranslatePayload {
+                target_lang: code.to_string(),
+                source_lang: None, // Auto-detect source language
+            })),
+            widget_type: None,
+            category: None, // Will be assigned by get_action_category
+        }).collect()
     }
     
     fn get_context_boost(&self, captured_text: &str) -> HashMap<String, f64> {
@@ -100,58 +116,37 @@ impl FeatureAsync for TranslatorFeature {
         action: &ActionType,
         params: &serde_json::Value,
     ) -> crate::shared::error::AppResult<ExecuteActionResponse> {
+        // Phase 4: Only handle new Translate variant
         let target_lang = match action {
-            ActionType::TranslateEn => "en",
-            ActionType::TranslateZh => "zh",
-            ActionType::TranslateEs => "es",
-            ActionType::TranslateFr => "fr",
-            ActionType::TranslateDe => "de",
-            ActionType::TranslateAr => "ar",
-            ActionType::TranslatePt => "pt",
-            ActionType::TranslateRu => "ru",
-            ActionType::TranslateJa => "ja",
-            ActionType::TranslateHi => "hi",
-            ActionType::TranslateIt => "it",
-            ActionType::TranslateNl => "nl",
-            ActionType::TranslatePl => "pl",
-            ActionType::TranslateTr => "tr",
-            ActionType::TranslateHy => "hy",
-            ActionType::TranslateFa => "fa",
-            ActionType::TranslateVi => "vi",
-            ActionType::TranslateId => "id",
-            ActionType::TranslateKo => "ko",
-            ActionType::TranslateBn => "bn",
-            ActionType::TranslateUr => "ur",
-            ActionType::TranslateTh => "th",
-            ActionType::TranslateSv => "sv",
-            ActionType::TranslateDa => "da",
-            ActionType::TranslateFi => "fi",
-            ActionType::TranslateHu => "hu",
-            _ => return Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
+            ActionType::Translate(payload) => payload.target_lang.as_str(),
+            _ => return Err(crate::shared::error::AppError::Unknown(
+                crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string(),
+            )),
         };
-        
+
         let text = params.get("text")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| crate::shared::error::AppError::Validation("Missing 'text' parameter".to_string()))?;
-            
-        let source_lang = params.get("source_lang")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        
-        let translate_request = TranslateRequest {
+            .unwrap_or("");
+
+        if text.is_empty() {
+            return Err(crate::shared::error::AppError::Unknown(
+                "No text provided for translation".to_string(),
+            ));
+        }
+
+        let request = TranslateRequest {
             text: text.to_string(),
-            source_lang,
+            source_lang: None, // Auto-detect
             target_lang: target_lang.to_string(),
             provider: None,
         };
-        
-        // Execute translation asynchronously
-        let response = translate_text(translate_request).await?;
-        
+
+        let response = translate_text(request).await?;
+
         Ok(ExecuteActionResponse {
             result: response.translated,
             metadata: Some(serde_json::json!({
-                "detected_lang": response.detected_source_lang,
+                "detected_source_lang": response.detected_source_lang,
             })),
         })
     }
@@ -161,6 +156,7 @@ impl FeatureAsync for TranslatorFeature {
 ///
 /// Uses the unofficial Google Translate API endpoint (free tier).
 /// For production, consider using the official Google Cloud Translation API.
+#[tauri::command]
 pub async fn translate_text(request: TranslateRequest) -> crate::shared::error::AppResult<TranslateResponse> {
     let _settings = AppSettings::load().await.unwrap_or_default();
     

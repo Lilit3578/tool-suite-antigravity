@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+use uuid::Uuid;
+use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings.ts")]
@@ -55,8 +57,40 @@ pub struct ConvertUnitsRequest {
 #[ts(export, export_to = "../../src/types/bindings.ts")]
 pub struct ConvertUnitsResponse {
     pub result: f64,
+    pub formatted_result: String,
     pub from_unit: String,
     pub to_unit: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct ConvertUnitPayload {
+    pub value: f64,
+    pub from_unit: String,
+    pub target_unit: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct ParseUnitResponse {
+    pub amount: f64,
+    pub unit: String,
+    pub category: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct GetUnitsResponse {
+    pub units: Vec<UnitDTO>,
+}
+
+// Rich Unit Data Transfer Object for frontend
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct UnitDTO {
+    pub id: String,       // Unit symbol (e.g., "m", "kg")
+    pub label: String,    // Display name (e.g., "Meters", "Kilograms")
+    pub category: String, // Category (e.g., "Length", "Mass")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -75,120 +109,99 @@ pub struct LogRequest {
 }
 
 
-// New types for unified command palette
+// Action types for command palette and widgets
+/// Phase 4: Production-ready - All variants use structured payloads
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
+#[serde(tag = "type", content = "payload")]
 #[ts(export, export_to = "../../src/types/bindings.ts")]
 pub enum ActionType {
-    // Translation actions - 26 languages
-    TranslateEn,
-    TranslateZh,
-    TranslateEs,
-    TranslateFr,
-    TranslateDe,
-    TranslateAr,
-    TranslatePt,
-    TranslateRu,
-    TranslateJa,
-    TranslateHi,
-    TranslateIt,
-    TranslateNl,
-    TranslatePl,
-    TranslateTr,
-    TranslateHy,
-    TranslateFa,
-    TranslateVi,
-    TranslateId,
-    TranslateKo,
-    TranslateBn,
-    TranslateUr,
-    TranslateTh,
-    TranslateSv,
-    TranslateDa,
-    TranslateFi,
-    TranslateHu,
+    // Translation actions - 26 languages consolidated into 1 variant
+    Translate(TranslatePayload),
     
-    // Currency conversion actions - 10 currencies
-    ConvertUsd,
-    ConvertEur,
-    ConvertGbp,
-    ConvertJpy,
-    ConvertAud,
-    ConvertCad,
-    ConvertChf,
-    ConvertCny,
-    ConvertInr,
-    ConvertMxn,
+    // Currency conversion - 10 currencies consolidated into 1 variant
+    ConvertCurrency(CurrencyPayload),
     
-    // Unit conversion actions - Length (8)
-    ConvertToMM,
-    ConvertToCM,
-    ConvertToM,
-    ConvertToKM,
-    ConvertToIN,
-    ConvertToFT,
-    ConvertToYD,
-    ConvertToMI,
+    // Time conversion with structured payload
+    ConvertTimeAction(TimePayload),
     
-    // Unit conversion actions - Mass (5)
-    ConvertToMG,
-    ConvertToG,
-    ConvertToKG,
-    ConvertToOZ,
-    ConvertToLB,
+    // Text analysis actions (word count, char count, reading time)
+    AnalyzeText(TextAnalysisPayload),
     
-    // Unit conversion actions - Volume (7)
-    ConvertToML,
-    ConvertToL,
-    ConvertToFlOz,
-    ConvertToCup,
-    ConvertToPint,
-    ConvertToQuart,
-    ConvertToGal,
-    
-    // Unit conversion actions - Temperature (3)
-    ConvertToC,
-    ConvertToF,
-    ConvertToK,
-    
-    // Unit conversion actions - Speed (4)
-    ConvertToMS,
-    ConvertToKMH,
-    ConvertToMPH,
-    ConvertToKnot,
-    
-    // Cross-category conversions - Volume to Mass (4)
-    ConvertVolToG,
-    ConvertVolToKG,
-    ConvertVolToOZ,
-    ConvertVolToLB,
-    
-    // Cross-category conversions - Mass to Volume (7)
-    ConvertMassToML,
-    ConvertMassToL,
-    ConvertMassToFlOz,
-    ConvertMassToCup,
-    ConvertMassToPint,
-    ConvertMassToQuart,
-    ConvertMassToGal,
-    
-    // Time zone conversion - polymorphic variant carrying timezone ID
-    ConvertTime(String),
-    
-    // Definition lookup actions
-    FindSynonyms,
-    FindAntonyms,
-    BriefDefinition,
-    
-    // Clipboard actions
-    ClearClipboardHistory,
-    PauseClipboard,
-    ResumeClipboard,
 
-    // Text analysis actions
+    
+    // Definition lookup actions (synonyms, antonyms, definitions)
+    DefinitionAction(DefinitionPayload),
+    
+    // Generic unit conversion (already structured)
+    ConvertUnit { target: String },
+}
+
+// ===== NEW: Payload Structures (Phase 1) =====
+
+/// Payload for translation actions
+/// Carries target language code and optional source language
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct TranslatePayload {
+    /// Target language code (e.g., "en", "es", "zh")
+    pub target_lang: String,
+    /// Optional source language code (None = auto-detect)
+    pub source_lang: Option<String>,
+}
+
+/// Payload for currency conversion actions (Phase 2)
+/// Carries target currency code
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct CurrencyPayload {
+    /// Target currency code (e.g., "USD", "EUR", "GBP")
+    pub target_currency: String,
+}
+
+// ===== Phase 3: Additional Payload Structures =====
+
+/// Payload for time conversion actions
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct TimePayload {
+    /// Target timezone (IANA identifier)
+    pub target_timezone: String,
+}
+
+/// Payload for text analysis actions
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct TextAnalysisPayload {
+    /// Type of text analysis to perform
+    pub action: TextAnalysisAction,
+}
+
+/// Text analysis action types
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub enum TextAnalysisAction {
     CountWords,
     CountChars,
     ReadingTime,
+}
+
+
+
+/// Payload for definition lookup actions
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub struct DefinitionPayload {
+    /// Type of definition lookup to perform
+    pub action: DefinitionAction,
+}
+
+/// Definition action types
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings.ts")]
+pub enum DefinitionAction {
+    FindSynonyms,
+    FindAntonyms,
+    BriefDefinition,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -289,12 +302,12 @@ pub struct CommandItem {
     pub category: Option<crate::core::context::category::ContextCategory>,
 }
 
-// OpenWidgetRequest removed (duplicate)
+
 
 // Forward declaration to avoid circular dependency
 // The category module will be defined in context/category.rs
 
-use chrono::{DateTime, Utc};
+
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings.ts")]

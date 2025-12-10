@@ -13,10 +13,11 @@ pub fn emit_event(app: &AppHandle, event: AppEvent) {
     
     match &event {
         AppEvent::ClipboardUpdated(item) => {
-            if let Err(e) = app.emit("clipboard://update", item) {
+            if let Err(e) = app.emit("clipboard://updated", item) {
                 eprintln!("Failed to emit clipboard update: {}", e);
             }
         }
+
         AppEvent::SettingsUpdated(settings) => {
             if let Err(e) = app.emit("settings://update", settings) {
                 eprintln!("Failed to emit settings update: {}", e);

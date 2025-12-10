@@ -1,8 +1,4 @@
-// Type definitions matching Rust backend types
-import {
-    type ClipboardHistoryItem,
-    type ClipboardItemType as GenClipboardItemType
-} from '../../types/bindings';
+
 
 export interface AppSettings {
     hotkeys: HotkeySettings;
@@ -47,7 +43,7 @@ export interface TranslateResponse {
 }
 
 export interface ConvertCurrencyRequest {
-    amount: number;
+    amount: string;
     from: string;
     to: string;
     date?: string;
@@ -68,8 +64,26 @@ export interface ConvertUnitsRequest {
 
 export interface ConvertUnitsResponse {
     result: number;
+    formatted_result: string;
     from_unit: string;
     to_unit: string;
+}
+
+// New types for unit converter registry
+export interface ParseUnitResponse {
+    amount: number;
+    unit: string;
+    category: string;
+}
+
+export interface GetUnitsResponse {
+    units: UnitDTO[];
+}
+
+export interface UnitDTO {
+    id: string;
+    label: string;
+    category: string;
 }
 
 export interface LogRequest {
@@ -78,101 +92,16 @@ export interface LogRequest {
 }
 
 // New types for unified command palette
+// IMPORTANT: Must match Rust's adjacently tagged serialization format
+// Backend uses: #[serde(tag = "type", content = "payload")]
 export type ActionType =
-    // Translation actions (26)
-    | 'translate_en'
-    | 'translate_zh'
-    | 'translate_es'
-    | 'translate_fr'
-    | 'translate_de'
-    | 'translate_ar'
-    | 'translate_pt'
-    | 'translate_ru'
-    | 'translate_ja'
-    | 'translate_hi'
-    | 'translate_it'
-    | 'translate_nl'
-    | 'translate_pl'
-    | 'translate_tr'
-    | 'translate_hy'
-    | 'translate_fa'
-    | 'translate_vi'
-    | 'translate_id'
-    | 'translate_ko'
-    | 'translate_bn'
-    | 'translate_ur'
-    | 'translate_th'
-    | 'translate_sv'
-    | 'translate_da'
-    | 'translate_fi'
-    | 'translate_hu'
-    // Currency conversion actions (10)
-    | 'convert_usd'
-    | 'convert_eur'
-    | 'convert_gbp'
-    | 'convert_jpy'
-    | 'convert_aud'
-    | 'convert_cad'
-    | 'convert_chf'
-    | 'convert_cny'
-    | 'convert_inr'
-    | 'convert_mxn'
-    // Unit conversion actions - Length (8)
-    | 'convert_to_mm'
-    | 'convert_to_cm'
-    | 'convert_to_m'
-    | 'convert_to_km'
-    | 'convert_to_in'
-    | 'convert_to_ft'
-    | 'convert_to_yd'
-    | 'convert_to_mi'
-    // Unit conversion actions - Mass (5)
-    | 'convert_to_mg'
-    | 'convert_to_g'
-    | 'convert_to_kg'
-    | 'convert_to_oz'
-    | 'convert_to_lb'
-    // Unit conversion actions - Volume (7)
-    | 'convert_to_ml'
-    | 'convert_to_l'
-    | 'convert_to_fl_oz'
-    | 'convert_to_cup'
-    | 'convert_to_pint'
-    | 'convert_to_quart'
-    | 'convert_to_gal'
-    // Unit conversion actions - Temperature (3)
-    | 'convert_to_c'
-    | 'convert_to_f'
-    | 'convert_to_k'
-    // Unit conversion actions - Speed (4)
-    | 'convert_to_ms'
-    | 'convert_to_kmh'
-    | 'convert_to_mph'
-    | 'convert_to_knot'
-    // Cross-category conversions - Volume to Mass (4)
-    | 'convert_vol_to_g'
-    | 'convert_vol_to_kg'
-    | 'convert_vol_to_oz'
-    | 'convert_vol_to_lb'
-    // Cross-category conversions - Mass to Volume (7)
-    | 'convert_mass_to_ml'
-    | 'convert_mass_to_l'
-    | 'convert_mass_to_fl_oz'
-    | 'convert_mass_to_cup'
-    | 'convert_mass_to_pint'
-    | 'convert_mass_to_quart'
-    | 'convert_mass_to_gal'
-    // Time zone conversion - polymorphic variant
-    | { convert_time: string }  // Carries timezone ID
-    // Definition actions
-    | 'find_synonyms'
-    | 'find_antonyms'
-    | 'find_antonyms'
-    | 'brief_definition'
-    // Text analysis actions
-    | 'count_words'
-    | 'count_chars'
-    | 'reading_time';
+    // Phase 4: Production-ready - Only structured payload variants
+    | { type: 'Translate'; payload: { target_lang: string; source_lang?: string } }
+    | { type: 'ConvertCurrency'; payload: { target_currency: string } }
+    | { type: 'ConvertTimeAction'; payload: { target_timezone: string } }
+    | { type: 'AnalyzeText'; payload: { action: 'CountWords' | 'CountChars' | 'ReadingTime' } }
+    | { type: 'DefinitionAction'; payload: { action: 'FindSynonyms' | 'FindAntonyms' | 'BriefDefinition' } }
+    | { type: 'ConvertUnit'; payload: { target: string } };
 
 export interface ConvertTimeRequest {
     time_input: string;
@@ -271,7 +200,15 @@ export interface ExecuteActionResponse {
     metadata?: Record<string, any>;
 }
 
-// Clipboard history types
-export type ClipboardItemType = GenClipboardItemType;
+
+
+export interface ClipboardHistoryItem {
+    id: string;
+    content: string;
+    item_type: "Text" | "Image" | "Html";
+    timestamp: string;
+    preview: string;
+    source_app?: string;
+}
 
 export type ClipboardItem = ClipboardHistoryItem;
