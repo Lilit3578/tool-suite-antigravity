@@ -2,7 +2,7 @@ use tauri::{AppHandle, Manager};
 use crate::shared::types::{ActionType, CommandItem, TextAnalysisRequest, TextAnalysisResponse};
 use std::collections::HashMap;
 use async_trait::async_trait;
-use super::text_analyser_logic;
+use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Clone)]
 pub struct TextAnalyserFeature;
@@ -84,7 +84,7 @@ impl super::FeatureAsync for TextAnalyserFeature {
 
         // Delegate logic to pure function
         // (If text is huge, we might want spawn_blocking, but for now direct call is fine as it's not IO blocking)
-        let analysis = text_analyser_logic::perform_analysis(&text);
+        let analysis = perform_analysis(&text);
 
         let analysis_action = match action {
             ActionType::AnalyzeText(payload) => &payload.action,
@@ -112,7 +112,37 @@ impl super::FeatureAsync for TextAnalyserFeature {
     }
 }
 
+/// Perform text analysis (pure logic)
+///
+/// This function is CPU-bound but generally fast enough for typical input sizes.
+/// For very large text, it should be run in `spawn_blocking`.
+pub fn perform_analysis(text: &str) -> TextAnalysisResponse {
+    let word_count = text.unicode_words().count();
+    let char_count = text.chars().count();
+    let char_count_no_spaces = text.chars().filter(|c| !c.is_whitespace()).count();
+    let grapheme_count = text.graphemes(true).count();
+    let line_count = text.lines().count();
+    
+    // Average reading speed: 200 wpm
+    // words / 200 = minutes
+    // minutes * 60 = seconds
+    let reading_time_sec = if word_count > 0 {
+        (word_count as f64 / 200.0) * 60.0
+    } else {
+        0.0
+    };
+
+    TextAnalysisResponse {
+        word_count,
+        char_count,
+        char_count_no_spaces,
+        grapheme_count,
+        line_count,
+        reading_time_sec,
+    }
+}
+
 #[tauri::command]
 pub async fn analyze_text(request: TextAnalysisRequest) -> crate::shared::error::AppResult<TextAnalysisResponse> {
-    Ok(text_analyser_logic::perform_analysis(&request.text))
+    Ok(perform_analysis(&request.text))
 }

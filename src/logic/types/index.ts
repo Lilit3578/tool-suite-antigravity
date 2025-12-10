@@ -1,8 +1,4 @@
-// Type definitions matching Rust backend types
-import {
-    type ClipboardHistoryItem,
-    type ClipboardItemType as GenClipboardItemType
-} from '@/types/bindings';
+
 
 export interface AppSettings {
     hotkeys: HotkeySettings;
@@ -104,7 +100,6 @@ export type ActionType =
     | { type: 'ConvertCurrency'; payload: { target_currency: string } }
     | { type: 'ConvertTimeAction'; payload: { target_timezone: string } }
     | { type: 'AnalyzeText'; payload: { action: 'CountWords' | 'CountChars' | 'ReadingTime' } }
-    | { type: 'ClipboardAction'; payload: { action: 'ClearHistory' | 'Pause' | 'Resume' } }
     | { type: 'DefinitionAction'; payload: { action: 'FindSynonyms' | 'FindAntonyms' | 'BriefDefinition' } }
     | { type: 'ConvertUnit'; payload: { target: string } };
 
@@ -205,7 +200,15 @@ export interface ExecuteActionResponse {
     metadata?: Record<string, any>;
 }
 
-// Clipboard history types
-export type ClipboardItemType = GenClipboardItemType;
+
+
+export interface ClipboardHistoryItem {
+    id: string;
+    content: string;
+    item_type: "Text" | "Image" | "Html";
+    timestamp: string;
+    preview: string;
+    source_app?: string;
+}
 
 export type ClipboardItem = ClipboardHistoryItem;

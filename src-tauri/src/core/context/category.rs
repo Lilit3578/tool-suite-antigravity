@@ -169,8 +169,7 @@ pub fn get_action_category(action: &ActionType) -> Option<ContextCategory> {
         // Time conversion - NEW structured variant only
         ActionType::ConvertTimeAction(_) => Some(ContextCategory::Time),
         
-        // Clipboard - NEW structured variant only
-        ActionType::ClipboardAction(_) => Some(ContextCategory::General),
+
     }
 }
 
@@ -269,11 +268,19 @@ mod tests {
         );
     }
 
-    // #[test]
-    // fn test_get_action_category_length() {
-    //     // TODO: Re-enable once ConvertUnit allows category resolution (currently returns None)
-    //     // assert_eq!(get_action_category(&ActionType::ConvertToKM), Some(ContextCategory::Length));
-    // }
+    #[test]
+    fn test_get_action_category_length() {
+        use crate::shared::types::ActionType;
+        // Verify that generic unit conversion actions are correctly categorized
+        assert_eq!(
+            get_action_category(&ActionType::ConvertUnit { target: "km".to_string() }), 
+            Some(ContextCategory::Length)
+        );
+        assert_eq!(
+            get_action_category(&ActionType::ConvertUnit { target: "kg".to_string() }), 
+            Some(ContextCategory::Mass)
+        );
+    }
 
     #[test]
     fn test_get_action_category_text() {

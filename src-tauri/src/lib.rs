@@ -68,15 +68,15 @@ pub fn run() {
             app.manage(window_lock);
             app.manage(shortcut_debounce.clone());
             
+
+
             // Start clipboard monitoring
             clipboard_monitor.start(app.handle().clone());
             println!("✅ Clipboard monitoring started");
 
             // Create tray menu (Command Palette as single access point)
             let palette_item = MenuItem::with_id(app, "palette", "Open Command Palette", true, None::<&str>)?;
-            let clipboard_item = MenuItem::with_id(app, "clipboard", "Clipboard History (5)", true, None::<&str>)?;
-            let toggle_monitor_item = MenuItem::with_id(app, "toggle_monitor", "⏸ Pause Monitoring", true, None::<&str>)?;
-            let clear_history_item = MenuItem::with_id(app, "clear_history", "Clear History", true, None::<&str>)?;
+
             let settings_item = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -86,9 +86,7 @@ pub fn run() {
                 &[
                     &palette_item,
                     &separator,
-                    &clipboard_item,
-                    &toggle_monitor_item,
-                    &clear_history_item,
+
                     &separator,
                     &settings_item,
                     &separator,
@@ -133,22 +131,7 @@ pub fn run() {
                                 }
                             });
                         }
-                        "toggle_monitor" => {
-                            if let Some(monitor) = app.try_state::<core::clipboard::monitor::ClipboardMonitor>() {
-                                let enabled = monitor.toggle();
-                                println!("Clipboard monitoring: {}", if enabled { "enabled" } else { "disabled" });
-                                
-                                // Update menu item text
-                                // Note: Tauri doesn't support dynamic menu text updates easily
-                                // This would require rebuilding the tray menu
-                            }
-                        }
-                        "clear_history" => {
-                            if let Some(history) = app.try_state::<core::clipboard::history::ClipboardHistory>() {
-                                history.clear();
-                                println!("Clipboard history cleared");
-                            }
-                        }
+
                         "settings" => {
                             // FIXED: Spawn async task instead of calling sync function
                             let app_handle = app.clone();
@@ -376,16 +359,14 @@ pub fn run() {
             features::currency::convert_currency,
             core::features::clipboard::get_clipboard_history,
             core::features::clipboard::paste_clipboard_item,
-            core::features::clipboard::clear_clipboard_history,
-            core::features::clipboard::toggle_clipboard_monitor,
-            core::features::clipboard::get_clipboard_monitor_status,
+
             core::features::time_converter::convert_time,
             core::features::time_converter::get_timezones,
             core::features::time_converter::parse_time_from_selection,
             core::features::time_converter::get_system_timezone,
             core::features::definition::lookup_definition,
             core::features::text_analyser::analyze_text,
-            core::clipboard::write_clipboard_text,
+
             // Unit Converter commands (new registry-based API)
             core::features::unit_converter::parse_text_command,
             core::features::unit_converter::get_all_units_command,

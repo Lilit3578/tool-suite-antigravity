@@ -82,7 +82,7 @@ export function TextAnalyserWidget() {
 
     const copyToClipboard = async (text: string, key: string) => {
         try {
-            await api.writeClipboardText(text);
+            await navigator.clipboard.writeText(text);
             updateCopyState(key);
         } catch {
             // Fallback

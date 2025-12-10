@@ -113,7 +113,7 @@ export function DefinitionWidget() {
 
     const copyToClipboard = async (text: string, index: number) => {
         try {
-            await api.writeClipboardText(text);
+            await navigator.clipboard.writeText(text);
             updateCopyState(index);
         } catch {
             // Fallback to navigator

@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+use uuid::Uuid;
+use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings.ts")]
@@ -125,8 +127,7 @@ pub enum ActionType {
     // Text analysis actions (word count, char count, reading time)
     AnalyzeText(TextAnalysisPayload),
     
-    // Clipboard management actions
-    ClipboardAction(ClipboardPayload),
+
     
     // Definition lookup actions (synonyms, antonyms, definitions)
     DefinitionAction(DefinitionPayload),
@@ -184,22 +185,7 @@ pub enum TextAnalysisAction {
     ReadingTime,
 }
 
-/// Payload for clipboard management actions
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../src/types/bindings.ts")]
-pub struct ClipboardPayload {
-    /// Type of clipboard action to perform
-    pub action: ClipboardAction,
-}
 
-/// Clipboard action types
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../src/types/bindings.ts")]
-pub enum ClipboardAction {
-    ClearHistory,
-    Pause,
-    Resume,
-}
 
 /// Payload for definition lookup actions
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -316,12 +302,12 @@ pub struct CommandItem {
     pub category: Option<crate::core::context::category::ContextCategory>,
 }
 
-// OpenWidgetRequest removed (duplicate)
+
 
 // Forward declaration to avoid circular dependency
 // The category module will be defined in context/category.rs
 
-use chrono::{DateTime, Utc};
+
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings.ts")]

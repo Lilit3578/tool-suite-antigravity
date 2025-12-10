@@ -15,9 +15,7 @@ pub mod clipboard;
 pub mod unit_converter;
 pub mod time_converter;
 pub mod definition;
-pub mod definition_client;
 pub mod text_analyser;
-pub mod text_analyser_logic;
 
 use async_trait::async_trait;
 
@@ -81,7 +79,7 @@ pub enum AppFeature {
     TimeConverter(time_converter::TimeConverterFeature),
     Definition(definition::DefinitionFeature),
     TextAnalyser(text_analyser::TextAnalyserFeature),
-    Clipboard(clipboard::ClipboardFeature),
+
 }
 
 impl AppFeature {
@@ -89,7 +87,7 @@ impl AppFeature {
         vec![
             AppFeature::Translator(translator::TranslatorFeature),
             AppFeature::Currency(currency::CurrencyFeature),
-            AppFeature::Clipboard(clipboard::ClipboardFeature),
+
             AppFeature::UnitConverter(unit_converter::UnitConverterFeature),
             AppFeature::TimeConverter(time_converter::TimeConverterFeature),
             AppFeature::Definition(definition::DefinitionFeature),
@@ -180,10 +178,7 @@ pub async fn execute_feature_action(
             println!("🔵 [dispatch] Routing TextAnalysis action -> TextAnalyser");
             text_analyser::TextAnalyserFeature.execute_action(&request.action_type, &request.params).await
         },
-        ActionType::ClipboardAction(_) => {
-            println!("🔵 [dispatch] Routing Clipboard action -> Clipboard");
-            clipboard::ClipboardFeature.execute_action(&request.action_type, &request.params).await
-        },
+
         ActionType::DefinitionAction(_) => {
             println!("🔵 [dispatch] Routing Definition action -> Definition");
             definition::DefinitionFeature.execute_action(&request.action_type, &request.params).await

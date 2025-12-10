@@ -4,7 +4,7 @@
 
 use crate::shared::types::*;
 use crate::core::clipboard::{ClipboardHistory, ClipboardMonitor};
-use crate::shared::types::ClipboardHistoryItem;
+
 use crate::core::context;
 use crate::system::automation;
 use super::{FeatureSync, FeatureAsync};
