@@ -420,7 +420,7 @@ async fn show_widget_window_async(
     let height = config.height as u32;
     let _title = config.title;
     let _transparent = config.transparent;
-    let _decorations = !config.resizable;
+    let _decorations = config.decorations;
     
     // Check if window already exists
     if let Some(window) = app.get_webview_window(&window_label) {
@@ -454,12 +454,15 @@ async fn show_widget_window_async(
             #[cfg(target_os = "macos")]
             {
                 system::window::nswindow::configure_window_for_fullscreen(&window).ok();
+                // FORCE CENTER every time it's shown
+                window.center().ok();
                 system::window::nswindow::show_window_over_fullscreen(&window).ok();
                 // That's it! Internal retry handles the rest
             }
             
             #[cfg(not(target_os = "macos"))]
             {
+                window.center().ok();
                 window.set_always_on_top(true).ok();
                 window.show().ok();
             }
@@ -520,7 +523,7 @@ fn show_widget_window_legacy(app: &tauri::AppHandle, widget: &str, has_selection
     let height = config.height as u32;
     let _title = config.title;
     let _transparent = config.transparent;
-    let _decorations = !config.resizable;
+    let _decorations = config.decorations;
     
     // Check if window already exists
     if let Some(window) = app.get_webview_window(&window_label) {
@@ -587,10 +590,12 @@ fn show_widget_window_legacy(app: &tauri::AppHandle, widget: &str, has_selection
                 match system::window::nswindow::show_window_over_fullscreen(&window) {
                     Ok(_) => {
                         println!("🔵 [DEBUG] [show_widget_window] ✓ Widget '{}' shown over fullscreen successfully", widget);
+                        window.center().ok(); // Force center
                     },
                         Err(e) => {
                         eprintln!("🔴 [DEBUG] [show_widget_window] ⚠️  Failed to show widget '{}' over fullscreen: {}", widget, e);
                     // Fallback
+                        window.center().ok();
                         window.set_always_on_top(true).ok();
                         window.show().ok();
                         window.set_focus().ok();
@@ -600,6 +605,7 @@ fn show_widget_window_legacy(app: &tauri::AppHandle, widget: &str, has_selection
             
             #[cfg(not(target_os = "macos"))]
             {
+                window.center().ok();
                 window.set_always_on_top(true).ok();
                 window.show().ok();
                 window.set_focus().ok();
@@ -619,19 +625,17 @@ async fn show_widget_window_create_new_async(app: &tauri::AppHandle, widget: &st
     let window_label = format!("{}-window", widget);
     
     // Define window dimensions
-    let (width, height, title, _transparent, decorations) = match widget {
-        "palette" => (550, 328, "Command Palette", true, false),
-        "clipboard" => (500, 400, "Clipboard History", false, false),
-        "translator" => (700, 550, "Translator", false, false),
-        "currency" => (500, 400, "Currency Converter", false, false),
-        "time_converter" => (600, 500, "Time Zone Converter", false, false),
-        "definition" => (400, 500, "Definition Lookup", false, false),
-        "settings" => (800, 600, "Settings", false, false),
-        _ => (600, 400, "Widget", false, false),
-    };
+    // Define window dimensions using centralized config
+    let config = config::get_window_config(widget);
+    let width = config.width;
+    let height = config.height;
+    let title = &config.title;
+    
+    // Legacy hardcoded match removed - now using config module exclusively
 
     // Create new window
-    let is_resizable = widget != "palette"; // Palette is non-resizable
+    let is_resizable = config.resizable;
+    let decorations = config.decorations;
     
     // Base builder with transparency for ALL windows initially
     // For palette, start invisible to prevent flash, then show after transparency is ready
@@ -649,9 +653,9 @@ async fn show_widget_window_create_new_async(app: &tauri::AppHandle, widget: &st
         .decorations(false)  // All windows start without decorations
         .skip_taskbar(true);  // Don't show in Dock/taskbar
     
-    // Add decorations back for non-palette widgets
+    // Add decorations back for non-palette widgets if configured
     if widget != "palette" && decorations {
-        builder = builder.decorations(true).transparent(false);
+        builder = builder.decorations(true).transparent(false).hidden_title(true);
     }
     
     // Add size constraints and floating properties for palette

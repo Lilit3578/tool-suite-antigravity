@@ -435,6 +435,23 @@ export function CommandPalette() {
                 return;
             }
 
+            // Req #4: Conditional Limit Check
+            // "Processing Actions" -> Limit to 250 chars
+            const isProcessingAction =
+                actionType.type === 'Translate' ||
+                actionType.type === 'AnalyzeText' ||
+                actionType.type === 'DefinitionAction'; // Assuming definition is also processing-heavy
+
+            if (isProcessingAction && textToUse.length > 250) {
+                setPopoverContent("Can't do more than 250 characters, open widget instead.");
+                setIsError(true);
+                setIsExecuting(false);
+                setExecutingActionId(null);
+                setPopoverOpen(true);
+                // Do NOT auto-close error, let user read it
+                return;
+            }
+
             // Show optimistic loading state
             setPopoverContent("Processing...");
             setPopoverOpen(true);
@@ -453,10 +470,9 @@ export function CommandPalette() {
             // Record usage (don't await - fire and forget)
             api.recordCommandUsage(actionId).catch(e => console.error("Failed to record usage:", e));
 
-            setTimeout(() => {
-                setPopoverOpen(false);
-                setSelectedActionId(null);
-            }, 3000);
+            // Req #3: Prevent Auto-Close
+            // Removed setTimeout - popover stays open until user interacts or clicks outside
+
         } catch (e) {
             const errObj = e as any;
             const message =
@@ -481,11 +497,7 @@ export function CommandPalette() {
             setIsExecuting(false);
             setExecutingActionId(null);
             setPopoverOpen(true);
-
-            setTimeout(() => {
-                setPopoverOpen(false);
-                setSelectedActionId(null);
-            }, 3000);
+            // Error also prevented from auto-closing
         }
     }
 
