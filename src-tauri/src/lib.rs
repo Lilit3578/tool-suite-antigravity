@@ -4,7 +4,7 @@ mod api;
 mod core;
 mod system;
 mod config;
-mod features;
+// mod features;  <-- REMOVED
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -58,6 +58,9 @@ pub fn run() {
             
             // FIXED: Add debounce flag to prevent concurrent shortcut triggers
             let shortcut_debounce = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+            // Initialize clipboard state (for ignoring ghost copies)
+            let clipboard_state = core::clipboard::ClipboardState::new();
             
             // Store in app state for access from commands
             // CRITICAL: Must manage ALL state BEFORE accessing it in closures
@@ -67,6 +70,7 @@ pub fn run() {
             app.manage(last_active_app);
             app.manage(window_lock);
             app.manage(shortcut_debounce.clone());
+            app.manage(clipboard_state);
             
 
 
@@ -228,7 +232,11 @@ pub fn run() {
                             println!("🔵 [DEBUG] [Shortcut] STEP 2: Detecting text selection (BEFORE window creation)...");
                             println!("🔵 [DEBUG] [Shortcut] Original app before detection: {:?}", original_app_before_detection);
                             
-                            let (has_selection, _selected_text) = match system::automation::macos::detect_text_selection(&handle_clone).await {
+                            // Get clipboard state to pass ignore flag
+                            let clipboard_state = handle_clone.state::<core::clipboard::ClipboardState>();
+                            let ignore_flag = Some(clipboard_state.ignore_next.clone());
+
+                            let (has_selection, _selected_text) = match system::automation::macos::detect_text_selection(&handle_clone, ignore_flag).await {
                                 Ok(result) => {
                                     println!("🔵 [DEBUG] [Shortcut] ✓ Selection detection completed: has_selection={}", result.0);
                                     result
@@ -355,8 +363,9 @@ pub fn run() {
             api::commands::settings::get_settings,
             api::commands::settings::save_settings,
             // Feature commands
-            features::translator::translate_text,
-            features::currency::convert_currency,
+            // Feature commands
+            core::features::translator::translate_text,
+            core::features::currency::convert_currency,
             core::features::clipboard::get_clipboard_history,
             core::features::clipboard::paste_clipboard_item,
 

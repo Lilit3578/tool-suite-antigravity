@@ -1,10 +1,11 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { Languages, DollarSign, Settings, Zap, Clipboard } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { listen } from "@tauri-apps/api/event";
 import { api } from "../logic/api/tauri";
 import type { CommandItem, ClipboardItem } from "../logic/types";
+import { sortCommands } from "../logic/utils/ranking";
 import {
     Command,
     CommandEmpty,
@@ -42,6 +43,7 @@ export function CommandPalette() {
 
     const actionRefs = useRef<Record<string, HTMLElement>>({});
     const inputRef = useRef<ComponentRef<typeof CommandInput>>(null);
+    const listRef = useRef<ComponentRef<typeof CommandList>>(null);
     const isPastingRef = useRef<boolean>(false);
     const [clipboardItems, setClipboardItems] = useState<ClipboardItem[]>([]);
 
@@ -337,17 +339,29 @@ export function CommandPalette() {
         return () => window.removeEventListener('keydown', handleKeyDown, true);
     }, [clipboardItems, query]);
 
+    // Reset scroll position when query changes
+    useEffect(() => {
+        // Immediate reset attempt
+        if (listRef.current) {
+            listRef.current.scrollTop = 0;
+        }
+
+        // Ensure reset happens after layout updates
+        requestAnimationFrame(() => {
+            if (listRef.current) {
+                listRef.current.scrollTop = 0;
+            }
+        });
+    }, [query]);
 
 
 
 
-    // Filter and organize commands
-    const filteredCommands = query.trim()
-        ? commands.filter(cmd =>
-            cmd.label.toLowerCase().includes(query.toLowerCase()) ||
-            cmd.description?.toLowerCase().includes(query.toLowerCase())
-        )
-        : commands;
+
+    // Filter and organize commands using Smart Ranking
+    const filteredCommands = useMemo(() => {
+        return sortCommands(commands, query, capturedText);
+    }, [commands, query, capturedText]);
 
     // Separate widgets and actions
     const allWidgets = filteredCommands.filter(c => c.widget_type);
@@ -504,6 +518,7 @@ export function CommandPalette() {
         >
             {/* Command Palette - let shadcn handle all styling */}
             <Command
+                shouldFilter={false}
                 style={{
                     position: 'absolute',
                     left: 0,
@@ -521,7 +536,7 @@ export function CommandPalette() {
                     autoFocus
                 />
 
-                <CommandList>
+                <CommandList ref={listRef}>
                     <CommandEmpty>
                         {isLoadingCommands ? (
                             <div className="flex flex-col items-center gap-2 py-4">
@@ -535,8 +550,8 @@ export function CommandPalette() {
 
                     {(suggestedItems.length > 0 || widgetItems.length > 0 || actionItems.length > 0) && <CommandSeparator />}
 
-                    {/* Clipboard History */}
-                    {clipboardItems.length > 0 && (
+                    {/* Clipboard History - Hides when typing to show ranked results */}
+                    {(!query && clipboardItems.length > 0) && (
                         <CommandGroup>
                             <div cmdk-group-heading="">clipboard history</div>
                             {clipboardItems.slice(0, 5).map((item, index) => (
@@ -558,7 +573,7 @@ export function CommandPalette() {
                         </CommandGroup>
                     )}
 
-                    {(clipboardItems.length > 0 && (suggestedItems.length > 0 || widgetItems.length > 0 || actionItems.length > 0)) && <CommandSeparator />}
+                    {(!query && clipboardItems.length > 0 && (suggestedItems.length > 0 || widgetItems.length > 0 || actionItems.length > 0)) && <CommandSeparator />}
 
                     {/* Suggested */}
                     {suggestedItems.length > 0 && (

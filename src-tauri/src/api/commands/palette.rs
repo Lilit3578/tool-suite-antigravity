@@ -56,6 +56,12 @@ pub async fn capture_selection(app: tauri::AppHandle, mode: Option<String>) -> A
         
         // Simulate Cmd+C to capture selection
         println!("🔵 [DEBUG] [CaptureSelection] Simulating Cmd+C...");
+        
+        // Set ignore flag to prevent ghost copy in history
+        let clipboard_state = app.state::<crate::core::clipboard::ClipboardState>();
+        clipboard_state.ignore_next.store(true, std::sync::atomic::Ordering::SeqCst);
+        println!("🔵 [DEBUG] [CaptureSelection] 🚩 Ignore flag set before manual copy");
+
         if let Err(e) = automation::simulate_cmd_c() {
             eprintln!("🔴 [DEBUG] [CaptureSelection] ✗ Failed to simulate Cmd+C: {}", e);
         } else {

@@ -3,7 +3,10 @@
 //! Provides currency conversion with 10 major currencies.
 
 use crate::core::context;
-use crate::features::currency::{service::CurrencyService, types as currency_types};
+pub mod service;
+pub mod types;
+use self::service::CurrencyService;
+use self::types as currency_types;
 use crate::shared::error::AppError;
 use crate::shared::types::*;
 use super::{FeatureAsync, FeatureSync};
@@ -165,6 +168,7 @@ impl FeatureAsync for CurrencyFeature {
 }
 
 // Legacy function retained for backward compatibility; delegates to the new service.
+#[tauri::command]
 pub async fn convert_currency(
     request: ConvertCurrencyRequest,
 ) -> crate::shared::error::AppResult<currency_types::ConvertCurrencyResponse> {

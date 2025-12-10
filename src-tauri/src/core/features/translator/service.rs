@@ -7,7 +7,7 @@ use serde_json;
 use urlencoding;
 use crate::shared::errors::CommandError;
 
-use crate::features::translator::types::{
+use super::types::{
     TranslationRequest, TranslationResponse, TranslatorError, TranslatorResult,
 };
 

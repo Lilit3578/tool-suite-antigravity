@@ -1,4 +1,5 @@
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use cocoa::base::{id, nil};
@@ -227,7 +228,7 @@ const CLIPBOARD_POLL_INTERVAL_MS: u64 = 50;
 ///    - Optionally restores previous clipboard content
 /// 
 /// IMPORTANT: Always writes captured text to clipboard so frontend can read it
-pub fn capture_selection() -> CommandResult<Option<String>> {
+pub fn capture_selection(ignore_flag: Option<Arc<AtomicBool>>) -> CommandResult<Option<String>> {
     // Use catch_unwind to prevent panics from crashing the app
     let result = std::panic::catch_unwind(|| {
         if !check_accessibility_permissions() {
@@ -241,6 +242,12 @@ pub fn capture_selection() -> CommandResult<Option<String>> {
                 println!("[CaptureSelection] ✅ Success via AX API (recursive search)");
                 
                 // CRITICAL FIX: Write to clipboard so frontend can read it
+                // Set ignore flag because we are manually writing to clipboard
+                if let Some(flag) = &ignore_flag {
+                    flag.store(true, Ordering::SeqCst);
+                    println!("[CaptureSelection] 🚩 Ignore flag set for manual write");
+                }
+                
                 if let Err(e) = write_text_to_clipboard(&text) {
                     eprintln!("[CaptureSelection] ⚠️ Failed to write to clipboard: {:?}", e);
                 }
@@ -257,7 +264,7 @@ pub fn capture_selection() -> CommandResult<Option<String>> {
 
         // Step 2: Fallback: Transactional "Ghost" Copy
         println!("[CaptureSelection] ⚠️  Falling back to simulated copy...");
-        match capture_via_simulated_copy() {
+        match capture_via_simulated_copy(ignore_flag) {
             Ok(Some(text)) => {
                 println!("[CaptureSelection] ✅ Success via fallback (simulated copy)");
                 // Clipboard is already updated by simulated copy
@@ -529,7 +536,7 @@ fn find_selection_in_element(element: id, depth: u8) -> CommandResult<Option<Str
 /// 
 /// Memory-safe implementation wrapped in autoreleasepool to prevent leaks/crashes
 /// Uses correct NSString class reference to avoid nil pointer crashes
-fn capture_via_simulated_copy() -> CommandResult<Option<String>> {
+fn capture_via_simulated_copy(ignore_flag: Option<Arc<AtomicBool>>) -> CommandResult<Option<String>> {
     // Wrap EVERYTHING in an autoreleasepool to prevent leaks/crashes
     autoreleasepool(|| {
         unsafe {
@@ -557,6 +564,12 @@ fn capture_via_simulated_copy() -> CommandResult<Option<String>> {
 
             // Step 2: Simulate Cmd+C (isolate in block)
             {
+                // Set ignore flag before simulating keypress
+                if let Some(flag) = &ignore_flag {
+                    flag.store(true, Ordering::SeqCst);
+                    println!("[CaptureViaCopy] 🚩 Ignore flag set for simulated Cmd+C");
+                }
+
                 // CGEventSourceStateID::HIDSystemState = 1
                 let source = CGEventSourceCreate(1);
                 if source == nil {
@@ -672,8 +685,8 @@ fn capture_via_simulated_copy() -> CommandResult<Option<String>> {
 }
 
 /// Smart selection detection (legacy - uses Accessibility API)
-pub async fn detect_text_selection(_app: &tauri::AppHandle) -> CommandResult<(bool, Option<String>)> {
-    match capture_selection() {
+pub async fn detect_text_selection(_app: &tauri::AppHandle, ignore_flag: Option<Arc<AtomicBool>>) -> CommandResult<(bool, Option<String>)> {
+    match capture_selection(ignore_flag) {
         Ok(Some(text)) => Ok((true, Some(text))),
         Ok(None) => Ok((false, None)),
         Err(e) => Err(e),

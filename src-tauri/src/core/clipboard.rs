@@ -9,9 +9,11 @@
 pub mod history;
 pub mod monitor;
 pub mod filter;
+pub mod state;
 
 pub use history::ClipboardHistory;
 pub use monitor::ClipboardMonitor;
+pub use state::ClipboardState;
 
 /// Write text to clipboard using Tauri's clipboard manager
 #[tauri::command]

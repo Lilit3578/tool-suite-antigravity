@@ -66,6 +66,10 @@ impl ClipboardMonitor {
                         if current_content.is_empty() {
                             BASE_POLL_INTERVAL_MS
                         } else {
+                            // Check for "Ghost Copy" flag
+                            let clipboard_state = app.state::<crate::core::clipboard::ClipboardState>();
+                            let should_ignore = clipboard_state.ignore_next.swap(false, Ordering::SeqCst);
+
                             // 1. Check if content has changed (Cheap check)
                             let has_changed = {
                                 let last = match last_content.lock() {
@@ -78,7 +82,22 @@ impl ClipboardMonitor {
                                 }
                             };
 
-                            if !has_changed {
+                            if should_ignore {
+                                if has_changed {
+                                    println!("[ClipboardMonitor] 👻 Ghost copy detected and ignored.");
+                                    // Update last_content state so we don't process this as a new change later
+                                    {
+                                        let mut last = match last_content.lock() {
+                                            Ok(guard) => guard,
+                                            Err(poisoned) => poisoned.into_inner(),
+                                        };
+                                        *last = Some(current_content.clone());
+                                    }
+                                } else {
+                                    println!("[ClipboardMonitor] 👻 Ghost flag consumed but content unchanged.");
+                                }
+                                BASE_POLL_INTERVAL_MS
+                            } else if !has_changed {
                                 BASE_POLL_INTERVAL_MS
                             } else {
                                 println!("[ClipboardMonitor] Detected clipboard change");
@@ -150,7 +169,8 @@ impl ClipboardMonitor {
                 };
 
                 // Single sleep point that respects backoff
-                tokio::time::sleep(Duration::from_millis(sleep_interval)).await;
+                let sleep_duration = Duration::from_millis(sleep_interval);
+                tokio::time::sleep(sleep_duration).await;
             }
         });
     }

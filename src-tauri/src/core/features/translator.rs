@@ -1,6 +1,8 @@
 //! Translator feature
 //!
 //! Provides translation functionality with 26 language support.
+pub mod service;
+pub mod types;
 
 use crate::shared::types::*;
 use crate::shared::settings::AppSettings;
@@ -154,6 +156,7 @@ impl FeatureAsync for TranslatorFeature {
 ///
 /// Uses the unofficial Google Translate API endpoint (free tier).
 /// For production, consider using the official Google Cloud Translation API.
+#[tauri::command]
 pub async fn translate_text(request: TranslateRequest) -> crate::shared::error::AppResult<TranslateResponse> {
     let _settings = AppSettings::load().await.unwrap_or_default();
     
