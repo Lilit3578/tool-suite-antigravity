@@ -134,6 +134,21 @@ impl FeatureAsync for TranslatorFeature {
             ));
         }
 
+        // Limit check: If text > 250 chars, return metadata to open widget
+        if text.len() > 250 {
+             return Ok(ExecuteActionResponse {
+                result: String::new(),
+                metadata: Some(serde_json::json!({
+                    "action": "open_widget",
+                    "widget": "translator",
+                    "payload": {
+                        "text": text,
+                        "target_lang": target_lang
+                    }
+                })),
+            });
+        }
+
         let request = TranslateRequest {
             text: text.to_string(),
             source_lang: None, // Auto-detect

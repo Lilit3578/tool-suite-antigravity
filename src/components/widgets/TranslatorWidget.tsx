@@ -93,8 +93,8 @@ export function TranslatorWidget() {
 
         api.translateText({
             text: debouncedInput,
-            target: targetCode,
-            source: sourceCode,
+            target_lang: targetCode,
+            source_lang: sourceCode,
         })
             .then((response) => {
                 if (currentRequest !== requestIdRef.current) return;

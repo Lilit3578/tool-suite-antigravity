@@ -508,6 +508,10 @@ static RE_PATTERN_3: Lazy<Regex> = Lazy::new(|| {
         .expect("Failed to compile regex pattern 3")
 });
 
+static RE_THOUSANDS: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(\d),(\d{3})").expect("Failed to compile regex RE_THOUSANDS")
+});
+
 // Parse amount and unit from text (e.g., "100m", "12 km", "3.5 meters", "2km to miles")
 // LAX PARSING: Extracts the first number/unit pair found anywhere in the string
 fn parse_unit_from_text(text: &str) -> Result<(f64, String), String> {
@@ -516,8 +520,15 @@ fn parse_unit_from_text(text: &str) -> Result<(f64, String), String> {
         return Err("Empty text".to_string());
     }
 
-    // Normalize comma decimal separators to dots
-    let normalized_text = text.replace(',', ".");
+    // Handle thousands separators (e.g. "10,000" -> "10000")
+    // Note: Iterative replacement handles overlapping matches like "1,000,000"
+    let mut normalized_text = text.to_string();
+    while RE_THOUSANDS.is_match(&normalized_text) {
+        normalized_text = RE_THOUSANDS.replace_all(&normalized_text, "$1$2").to_string();
+    }
+
+    // Normalize remaining decimal commas to dots (e.g. "10,5" -> "10.5")
+    let normalized_text = normalized_text.replace(',', ".");
 
     // Pattern 1: Number followed by unit (e.g., "12km", "12 km", "12 kilometers")
     // LAX: Use .find() to locate the pattern anywhere in the string
@@ -907,3 +918,4 @@ fn get_material_density(material: &str) -> Option<f64> {
         _ => None, // Unknown material, will use default (water)
     }
 }
+

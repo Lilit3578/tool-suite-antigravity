@@ -117,21 +117,21 @@ impl FeatureAsync for DefinitionFeature {
         let result = match def_action {
             DefinitionAction::FindSynonyms => {
                 if response.synonyms.is_empty() {
-                    format!("No synonyms found for '{}'", word)
+                    String::new()
                 } else {
-                    format!("Synonyms for '{}': {}", word, response.synonyms.join(", "))
+                    response.synonyms.join(", ")
                 }
             }
             DefinitionAction::FindAntonyms => {
                 if response.antonyms.is_empty() {
-                    format!("No antonyms found for '{}'", word)
+                    String::new()
                 } else {
-                    format!("Antonyms for '{}': {}", word, response.antonyms.join(", "))
+                    response.antonyms.join(", ")
                 }
             }
             DefinitionAction::BriefDefinition => {
                 if response.definitions.is_empty() {
-                    format!("No definition found for '{}'", word)
+                     String::new()
                 } else {
                     let first_def = &response.definitions[0];
                     format!("{} ({}): {}", word, first_def.part_of_speech, first_def.definition)
@@ -147,15 +147,33 @@ impl FeatureAsync for DefinitionFeature {
 }
 
 /// Sanitize input: extract first word, remove punctuation
+/// Sanitize input: strip common prefixes ("define", "synonyms for") and extract the core word
 fn sanitize_word(text: &str) -> String {
-    text.split_whitespace()
+    let lower = text.trim().to_lowercase();
+    
+    // Strip common prefixes
+    let cleaned = if lower.starts_with("define ") {
+        lower.strip_prefix("define ").unwrap()
+    } else if lower.starts_with("def ") {
+        lower.strip_prefix("def ").unwrap()
+    } else if lower.starts_with("synonyms for ") {
+        lower.strip_prefix("synonyms for ").unwrap()
+    } else if lower.starts_with("antonyms for ") {
+        lower.strip_prefix("antonyms for ").unwrap()
+    } else {
+        &lower
+    };
+
+    // Extract first valid word from the remainder
+    cleaned.split_whitespace()
         .next()
         .unwrap_or("")
         .chars()
         .filter(|c| c.is_alphabetic())
         .collect::<String>()
-        .to_lowercase()
 }
+
+
 
 // -- Client Logic Merged Here --
 

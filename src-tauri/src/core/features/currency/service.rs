@@ -323,7 +323,7 @@ impl CurrencyService {
             match token.as_str() {
                 "$" | "usd" | "dollar" | "dollars" => Some("USD".to_string()),
                 "€" | "eur" | "euro" | "euros" => Some("EUR".to_string()),
-                "£" | "gbp" | "pound" | "pounds" => Some("GBP".to_string()),
+                "£" | "gbp" | "pound" | "pounds" | "british pound" => Some("GBP".to_string()),
                 "¥" | "jpy" | "yen" => Some("JPY".to_string()),
                 _ => None,
             }
@@ -353,7 +353,7 @@ impl CurrencyService {
             match token.as_str() {
                 "$" | "usd" | "dollar" | "dollars" => Some("USD".to_string()),
                 "€" | "eur" | "euro" | "euros" => Some("EUR".to_string()),
-                "£" | "gbp" | "pound" | "pounds" => Some("GBP".to_string()),
+                "£" | "gbp" | "pound" | "pounds" | "british pound" => Some("GBP".to_string()),
                 "¥" | "jpy" | "yen" => Some("JPY".to_string()),
                 _ => None,
             }
@@ -381,3 +381,4 @@ impl CurrencyService {
         code.len() == 3 && code.chars().all(|c| c.is_ascii_alphabetic())
     }
 }
+

@@ -146,3 +146,5 @@ pub fn perform_analysis(text: &str) -> TextAnalysisResponse {
 pub async fn analyze_text(request: TextAnalysisRequest) -> crate::shared::error::AppResult<TextAnalysisResponse> {
     Ok(perform_analysis(&request.text))
 }
+
+

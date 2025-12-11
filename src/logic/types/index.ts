@@ -32,8 +32,9 @@ export interface CaptureResult {
 
 export interface TranslateRequest {
     text: string;
-    source?: string | null;
-    target: string;
+    source_lang?: string | null;
+    target_lang: string;
+    provider?: string | null;
 }
 
 export interface TranslateResponse {
