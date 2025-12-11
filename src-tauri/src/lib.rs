@@ -11,7 +11,7 @@ use tauri::{
     tray::{TrayIconBuilder, TrayIconEvent},
     Manager, WebviewUrl, WebviewWindowBuilder,
 };
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -181,119 +181,122 @@ pub fn run() {
                     // FIXED: Use the cloned debounce flag directly instead of accessing state
                     let debounce_clone = shortcut_debounce.clone();
                     
-                    if let Err(e) = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, _event| {
-                        // FIXED: Debounce to prevent concurrent triggers
-                        if debounce_clone.swap(true, std::sync::atomic::Ordering::Acquire) {
-                            println!("🔵 [DEBUG] Shortcut debounced - ignoring concurrent trigger");
-                            return;
-                        }
-                        
-                        println!("🔵 [DEBUG] ========== SHORTCUT TRIGGERED ==========");
-                        
-                        // Spawn async task to avoid blocking the shortcut handler
-                        let handle_clone = handle.clone();
-                        let last_app_clone = last_app_clone.clone();
-                        let debounce_reset = debounce_clone.clone();
-                        
-                        // Reset debounce flag after 500ms
-                        tauri::async_runtime::spawn(async move {
-                            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                            debounce_reset.store(false, std::sync::atomic::Ordering::Release);
-                        });
-                        
-                        // Main shortcut handler task
-                        tauri::async_runtime::spawn(async move {
-                            println!("🔵 [DEBUG] [Shortcut] Async task started");
-                            
-                            // STEP 1: Capture active app BEFORE any operations
-                            println!("🔵 [DEBUG] [Shortcut] STEP 1: Capturing active app...");
-                            let initial_active_app = system::automation::macos::get_active_app().ok();
-                            println!("🔵 [DEBUG] [Shortcut] Initial active app: {:?}", initial_active_app);
-                            
-                            // Store the active app for later paste operations
-                            if let Some(ref active_app) = initial_active_app {
-                                    match last_app_clone.lock() {
-                                        Ok(mut last_app) => {
-                                            *last_app = Some(active_app.clone());
-                                        println!("🔵 [DEBUG] [Shortcut] Stored active app: {}", active_app);
-                                        }
-                                        Err(poisoned) => {
-                                        eprintln!("🔴 [DEBUG] [Shortcut] Mutex poisoned, recovering...");
-                                            let mut guard = poisoned.into_inner();
-                                            *guard = Some(active_app.clone());
-                                    }
-                                }
+                    if let Err(e) = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
+                        // FIXED: Only trigger on KeyPress, ignore KeyRelease
+                        if event.state() == ShortcutState::Pressed {
+                            // FIXED: Debounce to prevent concurrent triggers
+                            if debounce_clone.swap(true, std::sync::atomic::Ordering::Acquire) {
+                                println!("🔵 [DEBUG] Shortcut debounced - ignoring concurrent trigger");
+                                return;
                             }
                             
-                            // STEP 2: Detect text selection BEFORE opening window
-                            // This is the KEY FIX - we capture selection while original app still has focus
-                            // FIXED: Store original app before detection to restore focus later
-                            let original_app_before_detection = system::automation::macos::get_active_app().ok();
-                            println!("🔵 [DEBUG] [Shortcut] STEP 2: Detecting text selection (BEFORE window creation)...");
-                            println!("🔵 [DEBUG] [Shortcut] Original app before detection: {:?}", original_app_before_detection);
+                            println!("🔵 [DEBUG] ========== SHORTCUT TRIGGERED ==========");
                             
-                            // Get clipboard state to pass ignore flag
-                            let clipboard_state = handle_clone.state::<core::clipboard::ClipboardState>();
-                            let ignore_flag = Some(clipboard_state.ignore_next.clone());
-
-                            let (has_selection, _selected_text) = match system::automation::macos::detect_text_selection(&handle_clone, ignore_flag).await {
-                                Ok(result) => {
-                                    println!("🔵 [DEBUG] [Shortcut] ✓ Selection detection completed: has_selection={}", result.0);
-                                    result
-                                }
-                                Err(e) => {
-                                    eprintln!("🔴 [DEBUG] [Shortcut] ✗ Selection detection failed: {}", e);
-                                    (false, None)
-                                }
-                            };
+                            // Spawn async task to avoid blocking the shortcut handler
+                            let handle_clone = handle.clone();
+                            let last_app_clone = last_app_clone.clone();
+                            let debounce_reset = debounce_clone.clone();
                             
-                            // STEP 3: NOW open the palette window with the selection result
-                            // Since we already captured the selection, there's no focus conflict
-                            println!("🔵 [DEBUG] [Shortcut] STEP 3: Opening palette window (has_selection={})...", has_selection);
+                            // Reset debounce flag after 500ms
+                            tauri::async_runtime::spawn(async move {
+                                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                                debounce_reset.store(false, std::sync::atomic::Ordering::Release);
+                            });
                             
-                            // Get window lock from app state
-                            if let Some(window_lock) = handle_clone.try_state::<std::sync::Arc<tokio::sync::Mutex<()>>>() {
-                                match show_widget_window_async(&handle_clone, "palette", has_selection, window_lock.inner().clone()).await {
-                                    Ok(_) => {
-                                        println!("🔵 [DEBUG] [Shortcut] ✓ Window opened successfully");
-                                        
-                                        // Just focus - no verification or retry (show_window_over_fullscreen handles retries internally)
-                                        if let Some(window) = handle_clone.get_webview_window("palette-window") {
-                                            // Increased delay for full transition to complete
-                                            tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
-                                            
-                                            // Set focus (safe during transition)
-                                            if let Err(e) = window.set_focus() {
-                                                eprintln!("🔴 [DEBUG] [Shortcut] ⚠️  Failed to give window focus: {}", e);
-                                            } else {
-                                                println!("🔵 [DEBUG] [Shortcut] ✓ Window has focus - ready for typing");
+                            // Main shortcut handler task
+                            tauri::async_runtime::spawn(async move {
+                                println!("🔵 [DEBUG] [Shortcut] Async task started");
+                                
+                                // STEP 1: Capture active app BEFORE any operations
+                                println!("🔵 [DEBUG] [Shortcut] STEP 1: Capturing active app...");
+                                let initial_active_app = system::automation::macos::get_active_app().ok();
+                                println!("🔵 [DEBUG] [Shortcut] Initial active app: {:?}", initial_active_app);
+                                
+                                // Store the active app for later paste operations
+                                if let Some(ref active_app) = initial_active_app {
+                                        match last_app_clone.lock() {
+                                            Ok(mut last_app) => {
+                                                *last_app = Some(active_app.clone());
+                                            println!("🔵 [DEBUG] [Shortcut] Stored active app: {}", active_app);
                                             }
+                                            Err(poisoned) => {
+                                            eprintln!("🔴 [DEBUG] [Shortcut] Mutex poisoned, recovering...");
+                                                let mut guard = poisoned.into_inner();
+                                                *guard = Some(active_app.clone());
                                         }
+                                    }
+                                }
+                                
+                                // STEP 2: Detect text selection BEFORE opening window
+                                // This is the KEY FIX - we capture selection while original app still has focus
+                                // FIXED: Store original app before detection to restore focus later
+                                let original_app_before_detection = system::automation::macos::get_active_app().ok();
+                                println!("🔵 [DEBUG] [Shortcut] STEP 2: Detecting text selection (BEFORE window creation)...");
+                                println!("🔵 [DEBUG] [Shortcut] Original app before detection: {:?}", original_app_before_detection);
+                                
+                                // Get clipboard state to pass ignore flag
+                                let clipboard_state = handle_clone.state::<core::clipboard::ClipboardState>();
+                                let ignore_flag = Some(clipboard_state.ignore_next.clone());
+
+                                let (has_selection, _selected_text) = match system::automation::macos::detect_text_selection(&handle_clone, ignore_flag).await {
+                                    Ok(result) => {
+                                        println!("🔵 [DEBUG] [Shortcut] ✓ Selection detection completed: has_selection={}", result.0);
+                                        result
                                     }
                                     Err(e) => {
-                                        eprintln!("🔴 [DEBUG] [Shortcut] ✗ Failed to show palette window: {}", e);
-                                        return;
+                                        eprintln!("🔴 [DEBUG] [Shortcut] ✗ Selection detection failed: {}", e);
+                                        (false, None)
                                     }
-                                }
-                            } else {
-                                eprintln!("🔴 [DEBUG] [Shortcut] ✗ Window lock not found in app state, using fallback");
-                                // Fallback to sync version
-                                if let Err(e) = show_widget_window(&handle_clone, "palette", has_selection) {
-                                    eprintln!("🔴 [DEBUG] [Shortcut] ✗ Fallback also failed: {}", e);
+                                };
+                                
+                                // STEP 3: NOW open the palette window with the selection result
+                                // Since we already captured the selection, there's no focus conflict
+                                println!("🔵 [DEBUG] [Shortcut] STEP 3: Opening palette window (has_selection={})...", has_selection);
+                                
+                                // Get window lock from app state
+                                if let Some(window_lock) = handle_clone.try_state::<std::sync::Arc<tokio::sync::Mutex<()>>>() {
+                                    match show_widget_window_async(&handle_clone, "palette", has_selection, window_lock.inner().clone()).await {
+                                        Ok(_) => {
+                                            println!("🔵 [DEBUG] [Shortcut] ✓ Window opened successfully");
+                                            
+                                            // Just focus - no verification or retry (show_window_over_fullscreen handles retries internally)
+                                            if let Some(window) = handle_clone.get_webview_window("palette-window") {
+                                                // Increased delay for full transition to complete
+                                                tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
+                                                
+                                                // Set focus (safe during transition)
+                                                if let Err(e) = window.set_focus() {
+                                                    eprintln!("🔴 [DEBUG] [Shortcut] ⚠️  Failed to give window focus: {}", e);
+                                                } else {
+                                                    println!("🔵 [DEBUG] [Shortcut] ✓ Window has focus - ready for typing");
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            eprintln!("🔴 [DEBUG] [Shortcut] ✗ Failed to show palette window: {}", e);
+                                            return;
+                                        }
+                                    }
                                 } else {
-                                    // Give window focus after showing
-                                    if let Some(window) = handle_clone.get_webview_window("palette-window") {
-                                        tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
-                                        window.set_focus().ok();
+                                    eprintln!("🔴 [DEBUG] [Shortcut] ✗ Window lock not found in app state, using fallback");
+                                    // Fallback to sync version
+                                    if let Err(e) = show_widget_window(&handle_clone, "palette", has_selection) {
+                                        eprintln!("🔴 [DEBUG] [Shortcut] ✗ Fallback also failed: {}", e);
+                                    } else {
+                                        // Give window focus after showing
+                                        if let Some(window) = handle_clone.get_webview_window("palette-window") {
+                                            tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
+                                            window.set_focus().ok();
+                                        }
                                     }
                                 }
-                            }
-                            
-                            // DONE: Window is shown and has focus, ready for user input
-                            println!("🔵 [DEBUG] [Shortcut] ✅ Window shown with focus - ready for typing!");
-                            
-                            println!("🔵 [DEBUG] ========== SHORTCUT HANDLER COMPLETE ==========");
-                        });
+                                
+                                // DONE: Window is shown and has focus, ready for user input
+                                println!("🔵 [DEBUG] [Shortcut] ✅ Window shown with focus - ready for typing!");
+                                
+                                println!("🔵 [DEBUG] ========== SHORTCUT HANDLER COMPLETE ==========");
+                            });
+                        }
                     }) {
                         eprintln!("Failed to set handler for command palette shortcut: {}", e);
                     } else {

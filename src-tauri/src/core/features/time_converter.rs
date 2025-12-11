@@ -771,7 +771,7 @@ impl FeatureAsync for TimeConverterFeature {
                     })),
                 })
             }
-            _ => Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
+            _ => Err(crate::shared::error::AppError::Unknown("Unsupported action type".to_string())),
         }
     }
 }

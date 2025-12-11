@@ -88,7 +88,7 @@ impl super::FeatureAsync for TextAnalyserFeature {
 
         let analysis_action = match action {
             ActionType::AnalyzeText(payload) => &payload.action,
-            _ => return Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
+            _ => return Err(crate::shared::error::AppError::Unknown("Unsupported action type".to_string())),
         };
 
         let result_text = match analysis_action {

@@ -120,7 +120,7 @@ impl FeatureAsync for TranslatorFeature {
         let target_lang = match action {
             ActionType::Translate(payload) => payload.target_lang.as_str(),
             _ => return Err(crate::shared::error::AppError::Unknown(
-                crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string(),
+                "Unsupported action type".to_string(),
             )),
         };
 

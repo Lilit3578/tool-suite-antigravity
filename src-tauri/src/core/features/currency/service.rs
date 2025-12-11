@@ -12,7 +12,7 @@ use reqwest::Client;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 
-use crate::shared::errors::CommandError;
+use crate::shared::error::AppError;
 
 use super::types::{
     CacheSnapshot, ConvertCurrencyRequest, ConvertCurrencyResponse, CurrencyResult, RatesApiResponse,
@@ -43,7 +43,7 @@ impl CurrencyService {
         svc.spawn_refresh_if_stale();
         SERVICE
             .set(svc.clone())
-            .map_err(|_| CommandError::Unknown("Currency service already initialized".into()))?;
+            .map_err(|_| AppError::System("Currency service already initialized".into()))?;
         Ok(svc)
     }
 
@@ -61,32 +61,32 @@ impl CurrencyService {
                 from = parsed_code;
             } else {
                 println!("[CurrencyService] Fuzzy parse failed for from='{}'", request.from);
-                return Err(CommandError::CurrencyNotSupported(request.from.clone()));
+                return Err(AppError::Validation(format!("Currency not supported: {}", request.from)));
             }
         }
 
         // Ensure cache is populated; network errors only surface when cache is empty.
-        if self.cache.read().map_err(|_| CommandError::SystemIO("cache poisoned".into()))?.is_empty() {
+        if self.cache.read().map_err(|_| AppError::System("cache poisoned".into()))?.is_empty() {
             println!("[CurrencyService] Cache empty; fetching rates");
             self.fetch_and_persist()
                 .await
-                .map_err(|e| CommandError::NetworkError(e.to_string()))?;
+                .map_err(|e| AppError::Network(e.to_string()))?;
         }
 
         let rates = self
             .cache
             .read()
-            .map_err(|_| CommandError::SystemIO("cache poisoned".into()))?;
+            .map_err(|_| AppError::System("cache poisoned".into()))?;
         println!("[CurrencyService] Cache size after seed/fetch: {}", rates.len());
 
         let from_rate = rates
             .get(&from)
             .cloned()
-            .ok_or_else(|| CommandError::CurrencyNotSupported(from.clone()))?;
+            .ok_or_else(|| AppError::Validation(format!("Currency not supported: {}", from)))?;
         let to_rate = rates
             .get(&to)
             .cloned()
-            .ok_or_else(|| CommandError::CurrencyNotSupported(request.to.clone()))?;
+            .ok_or_else(|| AppError::Validation(format!("Currency not supported: {}", request.to)))?;
 
         // Cross-rate relative to USD: (Amount / Rate_From) * Rate_To
         let cross_rate = Self::triangulate(Decimal::ONE, from_rate, to_rate)?;
@@ -113,11 +113,11 @@ impl CurrencyService {
 
     async fn new() -> CurrencyResult<Self> {
         let db_path = Self::db_path().await?;
-        let db = Database::create(db_path).map_err(|e| CommandError::SystemIO(e.to_string()))?;
+        let db = Database::create(db_path).map_err(|e| AppError::System(e.to_string()))?;
         let http = Client::builder()
             .user_agent("tool-suite-antigravity/currency")
             .build()
-            .map_err(|e| CommandError::NetworkError(e.to_string()))?;
+            .map_err(|e| AppError::Network(e.to_string()))?;
 
         Ok(Self {
             db,
@@ -130,7 +130,7 @@ impl CurrencyService {
     fn seed_from_disk(&self) -> CurrencyResult<()> {
         let snapshot = self.read_cache()?;
         {
-            let mut cache = self.cache.write().map_err(|_| CommandError::SystemIO("cache poisoned".into()))?;
+            let mut cache = self.cache.write().map_err(|_| AppError::System("cache poisoned".into()))?;
             *cache = snapshot.rates;
         }
         println!(
@@ -182,10 +182,10 @@ impl CurrencyService {
             .get("https://open.er-api.com/v6/latest/USD")
             .send()
             .await
-            .map_err(|e| CommandError::NetworkError(e.to_string()))?;
+            .map_err(|e| AppError::Network(e.to_string()))?;
 
         if !resp.status().is_success() {
-            return Err(CommandError::NetworkError(format!(
+            return Err(AppError::Network(format!(
                 "Failed to fetch rates: {}",
                 resp.status()
             )));
@@ -194,10 +194,10 @@ impl CurrencyService {
         let json: RatesApiResponse = resp
             .json()
             .await
-            .map_err(|e| CommandError::InvalidInput(format!("Invalid response: {}", e)))?;
+            .map_err(|e| AppError::Validation(format!("Invalid response: {}", e)))?;
 
         if json.result.to_lowercase() != "success" {
-            return Err(CommandError::NetworkError("API reported failure".into()));
+            return Err(AppError::Network("API reported failure".into()));
         }
 
         let mut rates = json.rates;
@@ -212,11 +212,11 @@ impl CurrencyService {
     }
 
     fn write_cache(&self, rates: &HashMap<String, Decimal>, updated_at: DateTime<Utc>) -> CurrencyResult<()> {
-        let txn = self.db.begin_write().map_err(|e| CommandError::SystemIO(e.to_string()))?;
+        let txn = self.db.begin_write().map_err(|e| AppError::System(e.to_string()))?;
         {
             let mut table = txn
                 .open_table(RATES_TABLE)
-                .map_err(|e| CommandError::SystemIO(e.to_string()))?;
+                .map_err(|e| AppError::System(e.to_string()))?;
 
             let snapshot_ts = updated_at.timestamp();
             for (code, rate) in rates {
@@ -225,19 +225,19 @@ impl CurrencyService {
                     updated_at: snapshot_ts,
                 };
                 let serialized = serde_json::to_string(&payload)
-                    .map_err(|e| CommandError::SystemIO(e.to_string()))?;
+                    .map_err(|e| AppError::System(e.to_string()))?;
                 table
                     .insert(code.as_str(), serialized.as_str())
-                    .map_err(|e| CommandError::SystemIO(e.to_string()))?;
+                    .map_err(|e| AppError::System(e.to_string()))?;
             }
 
             let ts_string = snapshot_ts.to_string();
             table
                 .insert(LAST_UPDATED_KEY, ts_string.as_str())
-                .map_err(|e| CommandError::SystemIO(e.to_string()))?;
+                .map_err(|e| AppError::System(e.to_string()))?;
         }
         txn.commit()
-            .map_err(|e| CommandError::SystemIO(e.to_string()))
+            .map_err(|e| AppError::System(e.to_string()))
     }
 
     fn replace_cache(&self, rates: HashMap<String, Decimal>, updated_at: DateTime<Utc>) {
@@ -253,10 +253,10 @@ impl CurrencyService {
         let mut rates = HashMap::new();
         let mut last_updated: Option<DateTime<Utc>> = None;
 
-        let txn = self.db.begin_read().map_err(|e| CommandError::SystemIO(e.to_string()))?;
+        let txn = self.db.begin_read().map_err(|e| AppError::System(e.to_string()))?;
         if let Ok(table) = txn.open_table(RATES_TABLE) {
-            for entry in table.iter().map_err(|e| CommandError::SystemIO(e.to_string()))? {
-                let (key, value) = entry.map_err(|e| CommandError::SystemIO(e.to_string()))?;
+            for entry in table.iter().map_err(|e| AppError::System(e.to_string()))? {
+                let (key, value) = entry.map_err(|e| AppError::System(e.to_string()))?;
                 let code = key.value();
                 let val = value.value();
                 if code == LAST_UPDATED_KEY {
@@ -279,9 +279,9 @@ impl CurrencyService {
 
     async fn db_path() -> CurrencyResult<PathBuf> {
         let proj_dirs = ProjectDirs::from("com", "Antigravity", "tool-suite-antigravity")
-            .ok_or_else(|| CommandError::SystemIO("Unable to determine data directory".into()))?;
+            .ok_or_else(|| AppError::System("Unable to determine data directory".into()))?;
         let mut path = proj_dirs.data_dir().to_path_buf();
-        tokio::fs::create_dir_all(&path).await.map_err(|e| CommandError::SystemIO(e.to_string()))?;
+        tokio::fs::create_dir_all(&path).await.map_err(|e| AppError::System(e.to_string()))?;
         path.push("currency_rates.redb");
         Ok(path)
     }
@@ -293,14 +293,14 @@ impl CurrencyService {
         }
 
         if from_rate.is_zero() {
-            return Err(CommandError::MathError("Division by zero".into()));
+            return Err(AppError::Calculation("Division by zero".into()));
         }
 
         amount
             .checked_div(from_rate)
-            .ok_or_else(|| CommandError::MathError("Division overflow".into()))?
+            .ok_or_else(|| AppError::Calculation("Division overflow".into()))?
             .checked_mul(to_rate)
-            .ok_or_else(|| CommandError::MathError("Multiplication overflow".into()))
+            .ok_or_else(|| AppError::Calculation("Multiplication overflow".into()))
     }
 
     /// Fuzzy parse inputs like "1euro" or "$10" into amount and currency code.

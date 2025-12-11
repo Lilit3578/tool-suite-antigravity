@@ -5,11 +5,12 @@ use redb::{Database, TableDefinition};
 use reqwest::Client;
 use serde_json;
 use urlencoding;
-use crate::shared::errors::CommandError;
+
 
 use super::types::{
-    TranslationRequest, TranslationResponse, TranslatorError, TranslatorResult,
+    TranslationRequest, TranslationResponse, TranslatorResult,
 };
+use crate::shared::error::AppError;
 
 const CACHE_TABLE: TableDefinition<[u8; 16], &str> = TableDefinition::new("translator_cache");
 const KEYRING_SERVICE: &str = "tool-suite-antigravity";
@@ -23,11 +24,11 @@ pub struct TranslatorService {
 impl TranslatorService {
     pub fn new() -> TranslatorResult<Self> {
         let cache_path = Self::cache_path();
-        let db = Database::create(cache_path).map_err(|e| TranslatorError::Cache(e.to_string()))?;
+        let db = Database::create(cache_path).map_err(|e| AppError::System(e.to_string()))?;
         let http = Client::builder()
             .user_agent("tool-suite-antigravity/translator")
             .build()
-            .map_err(|e| TranslatorError::Network(e.to_string()))?;
+            .map_err(|e| AppError::Network(e.to_string()))?;
 
         Ok(Self { db, http })
     }
@@ -59,24 +60,24 @@ impl TranslatorService {
             }
         }
         let entry =
-            Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT).map_err(|e| TranslatorError::Keyring(e.to_string()))?;
+            Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT).map_err(|e| AppError::System(e.to_string()))?;
         match entry.get_password() {
             Ok(p) => Ok(p),
             Err(err) => {
                 let msg = err.to_string();
                 if msg.to_lowercase().contains("not found") || msg.to_lowercase().contains("no entry") {
-                    Err(TranslatorError::MissingApiKey)
+                    Err(AppError::Validation("Missing API Key".to_string()))
                 } else {
-                    Err(TranslatorError::Keyring(msg))
+                    Err(AppError::System(msg))
                 }
             }
         }
     }
 
     fn load_from_cache(&self, hash: [u8; 16]) -> TranslatorResult<Option<TranslationResponse>> {
-        let read_txn = self.db.begin_read().map_err(|e| TranslatorError::Cache(e.to_string()))?;
+        let read_txn = self.db.begin_read().map_err(|e| AppError::System(e.to_string()))?;
         if let Ok(table) = read_txn.open_table(CACHE_TABLE) {
-            if let Some(value) = table.get(hash).map_err(|e| TranslatorError::Cache(e.to_string()))? {
+            if let Some(value) = table.get(hash).map_err(|e| AppError::System(e.to_string()))? {
                 let cached = value.value().to_string();
                 return Ok(Some(TranslationResponse {
                     translated: cached,
@@ -89,16 +90,16 @@ impl TranslatorService {
     }
 
     fn save_to_cache(&self, hash: [u8; 16], translated: &str) -> TranslatorResult<()> {
-        let write_txn = self.db.begin_write().map_err(|e| TranslatorError::Cache(e.to_string()))?;
+        let write_txn = self.db.begin_write().map_err(|e| AppError::System(e.to_string()))?;
         {
             let mut cache = write_txn
                 .open_table(CACHE_TABLE)
-                .map_err(|e| TranslatorError::Cache(e.to_string()))?;
+                .map_err(|e| AppError::System(e.to_string()))?;
             cache
                 .insert(hash, translated)
-                .map_err(|e| TranslatorError::Cache(e.to_string()))?;
+                .map_err(|e| AppError::System(e.to_string()))?;
         }
-        write_txn.commit().map_err(|e| TranslatorError::Cache(e.to_string()))?;
+        write_txn.commit().map_err(|e| AppError::System(e.to_string()))?;
         Ok(())
     }
 
@@ -107,12 +108,12 @@ impl TranslatorService {
         let target = req
             .target
             .to_639_1()
-            .ok_or_else(|| TranslatorError::InvalidLanguage(req.target.to_string()))?
+            .ok_or_else(|| AppError::Validation(format!("Invalid language: {}", req.target)))?
             .to_uppercase();
         let source_code = match req.source {
             Some(lang) => Some(
                 lang.to_639_1()
-                    .ok_or_else(|| TranslatorError::InvalidLanguage(lang.to_string()))?
+                    .ok_or_else(|| AppError::Validation(format!("Invalid language: {}", lang)))?
                     .to_uppercase(),
             ),
             None => None,
@@ -130,14 +131,14 @@ impl TranslatorService {
             .form(&form)
             .send()
             .await
-            .map_err(|e| TranslatorError::Network(e.to_string()))?
+            .map_err(|e| AppError::Network(e.to_string()))?
             .json::<serde_json::Value>()
             .await
-            .map_err(|e| TranslatorError::Serialization(e.to_string()))?;
+            .map_err(|e| AppError::Validation(e.to_string()))?;
 
         let translated = resp["translations"][0]["text"]
             .as_str()
-            .ok_or_else(|| TranslatorError::Serialization("missing translation text".to_string()))?
+            .ok_or_else(|| AppError::Validation("missing translation text".to_string()))?
             .to_string();
         let detected = resp["translations"][0]["detected_source_language"]
             .as_str()
@@ -150,7 +151,7 @@ impl TranslatorService {
         })
     }
 
-    pub async fn translate(&self, req: TranslationRequest) -> Result<String, CommandError> {
+    pub async fn translate(&self, req: TranslationRequest) -> TranslatorResult<String> {
         // =========================================================
         // PRODUCTION LOGIC (Commented out for Testing)
         // =========================================================
@@ -193,12 +194,12 @@ impl TranslatorService {
         let res = self.http.get(&url)
             .send()
             .await
-            .map_err(|e| CommandError::SystemIO(e.to_string()))?;
+            .map_err(|e| crate::shared::error::AppError::Network(e.to_string()))?;
         if !res.status().is_success() {
-            return Err(CommandError::SystemIO(format!("Google API Error: {}", res.status())));
+            return Err(crate::shared::error::AppError::Network(format!("Google API Error: {}", res.status())));
         }
         let raw_json: serde_json::Value = res.json().await
-            .map_err(|e| CommandError::SystemIO(format!("Failed to parse JSON: {}", e)))?;
+            .map_err(|e| crate::shared::error::AppError::Validation(format!("Failed to parse JSON: {}", e)))?;
         // Parse nested array: [[["Translated Text", ...]]]
         let mut result = String::new();
         if let Some(sentences) = raw_json.get(0).and_then(|v| v.as_array()) {
@@ -208,7 +209,7 @@ impl TranslatorService {
                 }
             }
         } else {
-            return Err(CommandError::SystemIO("Invalid response format from Google".to_string()));
+            return Err(crate::shared::error::AppError::Validation("Invalid response format from Google".to_string()));
         }
         Ok(result)
     }

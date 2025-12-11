@@ -102,7 +102,7 @@ impl FeatureAsync for CurrencyFeature {
             _ => {
                 println!("[CurrencyFeature] Currency ignoring action: {:?}", action);
                 return Err(crate::shared::error::AppError::Unknown(
-                    crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string(),
+                    "Unsupported action".to_string(),
                 ));
             }
         };

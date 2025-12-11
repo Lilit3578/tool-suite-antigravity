@@ -1,6 +1,6 @@
 use crate::shared::types::{ActionType, CommandItem, ConvertUnitsRequest, ConvertUnitsResponse, ExecuteActionResponse, ParseUnitResponse, GetUnitsResponse, UnitDTO};
 
-// Error constants - inline for now (can be moved to shared::errors later)
+// Error constants - inline for now
 const ERR_MISSING_TEXT_PARAM: &str = "Missing 'text' parameter";
 const ERR_NEGATIVE_LENGTH: &str = "Length cannot be negative. Please provide a positive value.";
 const ERR_NEGATIVE_MASS: &str = "Mass cannot be negative. Please provide a positive value.";
@@ -348,7 +348,7 @@ impl FeatureAsync for UnitConverterFeature {
                     })),
                 })
             },
-            _ => Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
+            _ => Err(crate::shared::error::AppError::Unknown("Unsupported action type".to_string())),
         }
     }
 }

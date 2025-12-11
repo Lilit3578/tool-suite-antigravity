@@ -1,6 +1,6 @@
 use isolang::Language;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use thiserror::Error;
+
 
 fn lang_code(lang: &Language) -> String {
     lang.to_639_1()
@@ -22,25 +22,8 @@ pub struct TranslationResponse {
     pub cached: bool,
 }
 
-#[derive(Debug, Error)]
-pub enum TranslatorError {
-    #[error("missing API key")]
-    MissingApiKey,
-    #[error("invalid language code: {0}")]
-    InvalidLanguage(String),
-    #[error("network error: {0}")]
-    Network(String),
-    #[error("cache error: {0}")]
-    Cache(String),
-    #[error("keyring error: {0}")]
-    Keyring(String),
-    #[error("serialization error: {0}")]
-    Serialization(String),
-    #[error("unknown error: {0}")]
-    Unknown(String),
-}
-
-pub type TranslatorResult<T> = Result<T, TranslatorError>;
+use crate::shared::error::AppError;
+pub type TranslatorResult<T> = Result<T, AppError>;
 
 impl Serialize for TranslationRequest {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

@@ -5,7 +5,9 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
-use crate::shared::errors::CommandError;
+use crate::shared::error::AppError;
+
+pub type CurrencyResult<T> = Result<T, AppError>;
 
 /// Request payload for currency conversion.
 ///
@@ -54,7 +56,7 @@ pub struct CacheSnapshot {
     pub last_updated: Option<DateTime<Utc>>,
 }
 
-pub type CurrencyResult<T> = Result<T, CommandError>;
+
 
 // ---- Serde helpers ----
 

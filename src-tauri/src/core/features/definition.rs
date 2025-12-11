@@ -111,7 +111,7 @@ impl FeatureAsync for DefinitionFeature {
         use crate::shared::types::DefinitionAction;
         let def_action = match action {
             ActionType::DefinitionAction(payload) => &payload.action,
-            _ => return Err(crate::shared::error::AppError::Unknown(crate::shared::errors::ERR_UNSUPPORTED_ACTION.to_string())),
+            _ => return Err(crate::shared::error::AppError::Unknown("Unsupported action type".to_string())),
         };
         
         let result = match def_action {
