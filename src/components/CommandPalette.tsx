@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from "react";
-import { Languages, Settings, CornerDownRight, Coins, BookOpen, WholeWord, Sunrise, Ruler } from "lucide-react";
+import { Languages, Settings, CornerDownRight, Coins, BookOpen, WholeWord, Sunrise, Ruler, Clipboard } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { listen } from "@tauri-apps/api/event";
@@ -14,6 +14,7 @@ import {
     CommandItem as CommandItemUI,
     CommandList,
     CommandSeparator,
+    CommandShortcut,
 } from "./ui/command";
 import type { ComponentRef } from "react";
 import {
@@ -607,7 +608,7 @@ export function CommandPalette() {
                     {/* Clipboard History - Hides when typing to show ranked results */}
                     {(!query && clipboardItems.length > 0) && (
                         <CommandGroup>
-                            <div cmdk-group-heading="">clipboard history</div>
+                            <div cmdk-group-heading="">clipboard</div>
                             {clipboardItems.slice(0, 5).map((item, index) => (
                                 <CommandItemUI
                                     key={item.id}
@@ -616,12 +617,11 @@ export function CommandPalette() {
                                     data-item-id={item.id}
                                     title={item.content || item.preview}
                                 >
-                                    <span className="text-sm body">[{index + 1}]</span>
-                                    <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                                    <Clipboard className="w-4 h-4" />
+                                    <div className="flex flex-col gap-xs py-1 flex-1 min-w-0">
                                         <span className="text-sm truncate">{item.preview}</span>
-                                        {item.source_app && <span className="text-[10px] text-muted-foreground">from {item.source_app}</span>}
                                     </div>
-                                    {/*<Clipboard className="w-4 h-4 mr-2" />*/}
+                                    <CommandShortcut>{index + 1}</CommandShortcut>
                                 </CommandItemUI>
                             ))}
                         </CommandGroup>
