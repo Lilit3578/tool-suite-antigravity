@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from "react";
-import { Languages, DollarSign, Settings, Zap, Clipboard } from "lucide-react";
+import { Languages, Settings, CornerDownRight, Coins, BookOpen, WholeWord, Sunrise, Ruler } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { listen } from "@tauri-apps/api/event";
@@ -354,6 +354,32 @@ export function CommandPalette() {
         });
     }, [query]);
 
+    // Trigger B: Close popover when user types in search bar
+    useEffect(() => {
+        if (popoverOpen) {
+            setPopoverOpen(false);
+            setSelectedActionId(null);
+        }
+    }, [query]); // Runs whenever query changes
+
+    // Trigger A: Close popover when user scrolls the command list
+    useEffect(() => {
+        const listElement = listRef.current;
+        if (!listElement) return;
+
+        const handleScroll = () => {
+            if (popoverOpen) {
+                setPopoverOpen(false);
+                setSelectedActionId(null);
+            }
+        };
+
+        listElement.addEventListener('scroll', handleScroll);
+        return () => {
+            listElement.removeEventListener('scroll', handleScroll);
+        };
+    }, [popoverOpen]); // Re-attach listener when popoverOpen changes
+
 
 
 
@@ -502,20 +528,36 @@ export function CommandPalette() {
     }
 
     const getIcon = (command: CommandItem) => {
-        // Determine icon based on widget type or action type
-        if (command.widget_type === 'translator' || (command.action_type && 'type' in command.action_type && command.action_type.type.startsWith('Translate'))) {
+        // Widget-specific icons
+        if (command.widget_type === 'translator') {
             return <Languages className="w-4 h-4" />;
         }
-        if (command.widget_type === 'currency' || (command.action_type && 'type' in command.action_type && command.action_type.type.startsWith('Convert') && command.action_type.type.includes('Usd'))) {
-            return <DollarSign className="w-4 h-4" />;
+        if (command.widget_type === 'currency') {
+            return <Coins className="w-4 h-4" />;
         }
-        if (command.widget_type === 'unit_converter' || (command.action_type && 'type' in command.action_type && command.action_type.type === 'ConvertUnit')) {
-            return <DollarSign className="w-4 h-4" />; // Using DollarSign as a generic conversion icon for now
+        if (command.widget_type === 'unit_converter') {
+            return <Ruler className="w-4 h-4" />;
+        }
+        if (command.widget_type === 'definition') {
+            return <BookOpen className="w-4 h-4" />;
+        }
+        if (command.widget_type === 'text_analyser') {
+            return <WholeWord className="w-4 h-4" />;
+        }
+        if (command.widget_type === 'time_converter') {
+            return <Sunrise className="w-4 h-4" />;
         }
         if (command.widget_type === 'settings') {
             return <Settings className="w-4 h-4" />;
         }
-        return <Zap className="w-4 h-4" />;
+
+        // Action-specific icons (all actions use CornerDownRight)
+        if (command.action_type) {
+            return <CornerDownRight className="w-4 h-4" />;
+        }
+
+        // Default fallback
+        return <CornerDownRight className="w-4 h-4" />;
     };
 
 
@@ -574,12 +616,12 @@ export function CommandPalette() {
                                     data-item-id={item.id}
                                     title={item.content || item.preview}
                                 >
-                                    <span className="text-xs text-muted-foreground mr-2 font-mono">[{index + 1}]</span>
-                                    <Clipboard className="w-4 h-4 mr-2" />
+                                    <span className="text-sm body">[{index + 1}]</span>
                                     <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                                        <span className="text-xs truncate">{item.preview}</span>
+                                        <span className="text-sm truncate">{item.preview}</span>
                                         {item.source_app && <span className="text-[10px] text-muted-foreground">from {item.source_app}</span>}
                                     </div>
+                                    {/*<Clipboard className="w-4 h-4 mr-2" />*/}
                                 </CommandItemUI>
                             ))}
                         </CommandGroup>

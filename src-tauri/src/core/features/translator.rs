@@ -167,14 +167,9 @@ impl FeatureAsync for TranslatorFeature {
     }
 }
 
-/// Translate text between languages
-///
-/// Uses the unofficial Google Translate API endpoint (free tier).
-/// For production, consider using the official Google Cloud Translation API.
+/// Translate text between languages using Google Translate API
 #[tauri::command]
 pub async fn translate_text(request: TranslateRequest) -> crate::shared::error::AppResult<TranslateResponse> {
-    let _settings = AppSettings::load().await.unwrap_or_default();
-    
     let client = reqwest::Client::new();
     
     // Determine source and target languages
@@ -214,7 +209,6 @@ pub async fn translate_text(request: TranslateRequest) -> crate::shared::error::
                             .map(|s| s.to_string());
 
                         if translated.is_empty() {
-                            // Fallback if parsing fails but request succeeded
                             Ok(TranslateResponse {
                                 translated: request.text.clone(),
                                 detected_source_lang: Some("auto".to_string()),
@@ -227,18 +221,16 @@ pub async fn translate_text(request: TranslateRequest) -> crate::shared::error::
                         }
                     }
                     Err(e) => {
-                        eprintln!("Failed to parse translation response: {}", e);
-                         Err(crate::shared::error::AppError::Unknown(format!("Failed to parse translation API response: {}", e)))
+                         Err(crate::shared::error::AppError::Unknown(format!("Failed to parse Google API response: {}", e)))
                     }
                 }
             } else {
-                eprintln!("Translation API returned error: {}", response.status());
-                Err(crate::shared::error::AppError::Network(format!("Translation API error: {}", response.status())))
+                Err(crate::shared::error::AppError::Network(format!("Google API error: {}", response.status())))
             }
         }
         Err(e) => {
-            eprintln!("Translation API request failed: {}", e);
-            Err(crate::shared::error::AppError::Network(format!("Translation API request failed: {}", e)))
+            Err(crate::shared::error::AppError::Network(format!("Google API request failed: {}", e)))
         }
     }
 }
+

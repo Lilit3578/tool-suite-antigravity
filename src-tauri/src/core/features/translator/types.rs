@@ -22,6 +22,13 @@ pub struct TranslationResponse {
     pub cached: bool,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum LanguageStatus {
+    Installed = 0,
+    NeedsDownload = 1,
+    Unsupported = 2,
+}
+
 use crate::shared::error::AppError;
 pub type TranslatorResult<T> = Result<T, AppError>;
 
