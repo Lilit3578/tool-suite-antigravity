@@ -71,7 +71,7 @@ function parseAmountFromText(text: string): number | null {
 }
 
 export function CurrencyConverterWidget() {
-    console.log('🔵 [CurrencyConverter] Component rendering...');
+    // console.log('🔵 [CurrencyConverter] Component rendering...');
 
     const [amount, setAmount] = useState("");
     const [fromCurrency, setFromCurrency] = useState("USD");
@@ -80,38 +80,38 @@ export function CurrencyConverterWidget() {
     const [rate, setRate] = useState<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    console.log('🔵 [CurrencyConverter] State initialized, amount:', amount);
+    // console.log('🔵 [CurrencyConverter] State initialized, amount:', amount);
 
     // Load text on mount - clipboard should already have the selected text from shortcut handler
     useEffect(() => {
         const loadText = async () => {
-            console.log('[CurrencyConverter] Loading text on mount...');
+            // console.log('[CurrencyConverter] Loading text on mount...');
             try {
                 // First try clipboard (should have the selection captured by shortcut handler)
                 const clipboardResult = await api.captureSelection("clipboard");
-                console.log('[CurrencyConverter] Clipboard result:', clipboardResult);
+                // console.log('[CurrencyConverter] Clipboard result:', clipboardResult);
                 if (clipboardResult.text && clipboardResult.text.trim()) {
                     const parsedAmount = parseAmountFromText(clipboardResult.text);
-                    console.log('[CurrencyConverter] Parsed amount from clipboard:', parsedAmount);
+                    // console.log('[CurrencyConverter] Parsed amount from clipboard:', parsedAmount);
                     if (parsedAmount !== null) {
                         setAmount(String(parsedAmount));
-                        console.log('[CurrencyConverter] Set amount from clipboard:', parsedAmount);
+                        // console.log('[CurrencyConverter] Set amount from clipboard:', parsedAmount);
                         return;
                     }
                     const directAmount = parseFloat(clipboardResult.text.trim());
                     if (!isNaN(directAmount)) {
                         setAmount(String(directAmount));
-                        console.log('[CurrencyConverter] Set direct amount from clipboard:', directAmount);
+                        // console.log('[CurrencyConverter] Set direct amount from clipboard:', directAmount);
                         return;
                     }
                 }
 
                 // Fallback: try to capture selection if clipboard is empty or parsing failed
                 const result = await api.captureSelection("selection");
-                console.log('[CurrencyConverter] Selection result:', result);
+                // console.log('[CurrencyConverter] Selection result:', result);
                 if (result.text && result.text.trim()) {
                     const parsedAmount = parseAmountFromText(result.text);
-                    console.log('[CurrencyConverter] Parsed amount from selection:', parsedAmount);
+                    // console.log('[CurrencyConverter] Parsed amount from selection:', parsedAmount);
                     if (parsedAmount !== null) {
                         setAmount(String(parsedAmount));
                     } else {

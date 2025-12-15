@@ -532,55 +532,64 @@ fn parse_unit_from_text(text: &str) -> Result<(f64, String), String> {
 
     // Pattern 1: Number followed by unit (e.g., "12km", "12 km", "12 kilometers")
     // LAX: Use .find() to locate the pattern anywhere in the string
+    // Safe: Use get() instead of direct indexing to prevent panic if capture group is missing
     if let Some(caps) = RE_PATTERN_1.captures(&normalized_text) {
-        if let (Ok(amount), Some(unit_str)) = (caps[1].parse::<f64>(), caps.get(2)) {
-            if let Some(canonical_unit) = normalize_unit(unit_str.as_str()) {
-                println!("[parse_unit_from_text] ✓ Extracted: {} {} from '{}'", amount, canonical_unit, text);
-                return Ok((amount, canonical_unit.to_string()));
+        if let (Some(amount_str), Some(unit_str)) = (caps.get(1), caps.get(2)) {
+            if let Ok(amount) = amount_str.as_str().parse::<f64>() {
+                if let Some(canonical_unit) = normalize_unit(unit_str.as_str()) {
+                    println!("[parse_unit_from_text] ✓ Extracted: {} {} from '{}'", amount, canonical_unit, text);
+                    return Ok((amount, canonical_unit.to_string()));
+                }
             }
         }
     }
 
     // Pattern 2: Unit followed by number (e.g., "km12", "m 100")
+    // Safe: Use get() instead of direct indexing to prevent panic if capture group is missing
     if let Some(caps) = RE_PATTERN_2.captures(&normalized_text) {
-        if let (Some(unit_str), Ok(amount)) = (caps.get(1), caps[2].parse::<f64>()) {
-            if let Some(canonical_unit) = normalize_unit(unit_str.as_str()) {
-                println!("[parse_unit_from_text] ✓ Extracted: {} {} from '{}'", amount, canonical_unit, text);
-                return Ok((amount, canonical_unit.to_string()));
+        if let (Some(unit_str), Some(amount_str)) = (caps.get(1), caps.get(2)) {
+            if let Ok(amount) = amount_str.as_str().parse::<f64>() {
+                if let Some(canonical_unit) = normalize_unit(unit_str.as_str()) {
+                    println!("[parse_unit_from_text] ✓ Extracted: {} {} from '{}'", amount, canonical_unit, text);
+                    return Ok((amount, canonical_unit.to_string()));
+                }
             }
         }
     }
 
     // Pattern 3: Try to extract any number and any known unit from the text
+    // Safe: Use get() instead of direct indexing to prevent panic if capture group is missing
     if let Some(caps) = RE_PATTERN_3.captures(&normalized_text) {
-        if let Ok(amount) = caps[1].parse::<f64>() {
-            let text_lower = normalized_text.to_lowercase();
-            // Check common unit patterns (longest first to match "kilometers" before "km")
-            for (alias, canonical) in [
-                ("kilometers", "km"), ("kilometer", "km"), ("kilometres", "km"), ("kilometre", "km"),
-                ("meters", "m"), ("meter", "m"), ("metres", "m"), ("metre", "m"),
-                ("centimeters", "cm"), ("centimeter", "cm"), ("centimetres", "cm"), ("centimetre", "cm"),
-                ("millimeters", "mm"), ("millimeter", "mm"), ("millimetres", "mm"), ("millimetre", "mm"),
-                ("inches", "in"), ("inch", "in"),
-                ("feet", "ft"), ("foot", "ft"),
-                ("yards", "yd"), ("yard", "yd"),
-                ("miles", "mi"), ("mile", "mi"),
-                ("grams", "g"), ("gram", "g"),
-                ("kilograms", "kg"), ("kilogram", "kg"),
-                ("milligrams", "mg"), ("milligram", "mg"),
-                ("ounces", "oz"), ("ounce", "oz"),
-                ("pounds", "lb"), ("pound", "lb"),
-                ("liters", "L"), ("liter", "L"), ("litres", "L"), ("litre", "L"),
-                ("milliliters", "ml"), ("milliliter", "ml"), ("millilitres", "ml"), ("millilitre", "ml"),
-                ("gallons", "gal"), ("gallon", "gal"),
-                ("cups", "cup"), ("cup", "cup"),
-                ("fluid ounces", "fl-oz"), ("fluid ounce", "fl-oz"),
-                ("celsius", "C"), ("fahrenheit", "F"),
-                ("kilometers per hour", "km/h"), ("miles per hour", "m/h"),
-            ] {
-                if text_lower.contains(alias) {
-                    println!("[parse_unit_from_text] ✓ Extracted: {} {} from '{}'", amount, canonical, text);
-                    return Ok((amount, canonical.to_string()));
+        if let Some(amount_str) = caps.get(1) {
+            if let Ok(amount) = amount_str.as_str().parse::<f64>() {
+                let text_lower = normalized_text.to_lowercase();
+                // Check common unit patterns (longest first to match "kilometers" before "km")
+                for (alias, canonical) in [
+                    ("kilometers", "km"), ("kilometer", "km"), ("kilometres", "km"), ("kilometre", "km"),
+                    ("meters", "m"), ("meter", "m"), ("metres", "m"), ("metre", "m"),
+                    ("centimeters", "cm"), ("centimeter", "cm"), ("centimetres", "cm"), ("centimetre", "cm"),
+                    ("millimeters", "mm"), ("millimeter", "mm"), ("millimetres", "mm"), ("millimetre", "mm"),
+                    ("inches", "in"), ("inch", "in"),
+                    ("feet", "ft"), ("foot", "ft"),
+                    ("yards", "yd"), ("yard", "yd"),
+                    ("miles", "mi"), ("mile", "mi"),
+                    ("grams", "g"), ("gram", "g"),
+                    ("kilograms", "kg"), ("kilogram", "kg"),
+                    ("milligrams", "mg"), ("milligram", "mg"),
+                    ("ounces", "oz"), ("ounce", "oz"),
+                    ("pounds", "lb"), ("pound", "lb"),
+                    ("liters", "L"), ("liter", "L"), ("litres", "L"), ("litre", "L"),
+                    ("milliliters", "ml"), ("milliliter", "ml"), ("millilitres", "ml"), ("millilitre", "ml"),
+                    ("gallons", "gal"), ("gallon", "gal"),
+                    ("cups", "cup"), ("cup", "cup"),
+                    ("fluid ounces", "fl-oz"), ("fluid ounce", "fl-oz"),
+                    ("celsius", "C"), ("fahrenheit", "F"),
+                    ("kilometers per hour", "km/h"), ("miles per hour", "m/h"),
+                ] {
+                    if text_lower.contains(alias) {
+                        println!("[parse_unit_from_text] ✓ Extracted: {} {} from '{}'", amount, canonical, text);
+                        return Ok((amount, canonical.to_string()));
+                    }
                 }
             }
         }
@@ -861,9 +870,14 @@ fn format_number(value: f64) -> String {
             .trim_end_matches('.')
             .to_string();
         // Add thousands separators manually for large numbers
+        // Safe: Check parts length before indexing to prevent panic
         return if formatted.contains('.') {
             let parts: Vec<&str> = formatted.split('.').collect();
-            format!("{}.{}", add_thousands_separators(parts[0]), parts[1])
+            if parts.len() >= 2 {
+                format!("{}.{}", add_thousands_separators(parts[0]), parts[1])
+            } else {
+                add_thousands_separators(&formatted)
+            }
         } else {
             add_thousands_separators(&formatted)
         };

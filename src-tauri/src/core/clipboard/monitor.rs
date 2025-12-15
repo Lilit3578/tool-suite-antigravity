@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::shared::types::ClipboardHistoryItem;
 use crate::shared::events::AppEvent;
 use crate::shared::emit::emit_event;
@@ -130,13 +131,7 @@ impl ClipboardMonitor {
                                     
                                     emit_event(&app, AppEvent::ClipboardUpdated(item));
                                     
-                                    println!("✅ Clipboard updated: \"{}\"", 
-                                        if current_content_string.len() > 20 { 
-                                            format!("{}...", &current_content_string[0..20]) 
-                                        } else { 
-                                            current_content_string.clone() 
-                                        }
-                                    );
+                                    println!("✅ Clipboard updated ({} chars)", current_content_string.len());
                                     
                                     BASE_POLL_INTERVAL_MS
                                 }

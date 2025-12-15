@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -329,7 +328,7 @@ pub enum ClipboardItemType {
 }
 
 /// A single clipboard history item
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings.ts")]
 pub struct ClipboardHistoryItem {
     pub id: String,
@@ -341,11 +340,26 @@ pub struct ClipboardHistoryItem {
     pub source_app: Option<String>,
 }
 
+// SECURITY: Custom Debug implementation to prevent sensitive content from leaking into logs
+impl std::fmt::Debug for ClipboardHistoryItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClipboardHistoryItem")
+            .field("id", &self.id)
+            .field("item_type", &self.item_type)
+            .field("content", &format!("[REDACTED {} chars]", self.content.len()))
+            .field("preview", &format!("[REDACTED {} chars]", self.preview.len()))
+            .field("timestamp", &self.timestamp)
+            .field("source_app", &self.source_app)
+            .finish()
+    }
+}
+
 impl ClipboardHistoryItem {
     /// Create a new text clipboard item
     pub fn new_text(content: String, source_app: Option<String>) -> Self {
+        // Safe: Clamped to length to prevent panic on short strings
         let preview = if content.len() > 100 {
-            format!("{}...", &content[..100])
+            format!("{}...", &content[..content.len().min(100)])
         } else {
             content.clone()
         };
@@ -379,8 +393,9 @@ impl ClipboardHistoryItem {
         // No, `impl` blocks can be anywhere. Using it here is fine.
         
         let preview = strip_html_tags(&content);
+        // Safe: Clamped to length to prevent panic on short strings
         let preview = if preview.len() > 100 {
-            format!("{}...", &preview[..100])
+            format!("{}...", &preview[..preview.len().min(100)])
         } else {
             preview
         };

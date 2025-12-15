@@ -136,12 +136,17 @@ impl TranslatorService {
             .await
             .map_err(|e| AppError::Validation(e.to_string()))?;
 
-        let translated = resp["translations"][0]["text"]
-            .as_str()
+        // Safe: Use get() to access nested arrays safely, preventing panic on malformed API responses
+        let translated = resp.get("translations")
+            .and_then(|v| v.get(0))
+            .and_then(|v| v.get("text"))
+            .and_then(|v| v.as_str())
             .ok_or_else(|| AppError::Validation("missing translation text".to_string()))?
             .to_string();
-        let detected = resp["translations"][0]["detected_source_language"]
-            .as_str()
+        let detected = resp.get("translations")
+            .and_then(|v| v.get(0))
+            .and_then(|v| v.get("detected_source_language"))
+            .and_then(|v| v.as_str())
             .and_then(|code| isolang::Language::from_639_1(code.to_ascii_lowercase().as_str()));
 
         Ok(TranslationResponse {

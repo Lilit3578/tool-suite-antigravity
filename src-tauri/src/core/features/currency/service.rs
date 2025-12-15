@@ -306,7 +306,7 @@ impl CurrencyService {
     /// Fuzzy parse inputs like "1euro" or "$10" into amount and currency code.
     pub fn parse_natural_input(input: &str) -> Option<(Decimal, String)> {
         static RE: OnceLock<Regex> = OnceLock::new();
-        let re = RE.get_or_init(|| Regex::new(r"(?i)^\s*(\D*)(\d+(?:\.\d+)?)(\D*)\s*$").unwrap());
+        let re = RE.get_or_init(|| Regex::new(r"(?i)^\s*(\D*)(\d+(?:\.\d+)?)(\D*)\s*$").expect("Invalid natural input regex"));
 
         let caps = re.captures(input)?;
         let prefix = caps.get(1).map(|m| m.as_str()).unwrap_or("").trim();
@@ -336,7 +336,7 @@ impl CurrencyService {
     /// Fuzzy parse strings with prefix/suffix markers and commas: "$10", "1euro", "€5".
     pub fn parse_fuzzy_amount(input: &str) -> Option<(Decimal, String)> {
         static RE: OnceLock<Regex> = OnceLock::new();
-        let re = RE.get_or_init(|| Regex::new(r"(?i)^([^\d\.,]*)([\d\.,]+)([^\d\.,]*)$").unwrap());
+        let re = RE.get_or_init(|| Regex::new(r"(?i)^([^\d\.,]*)([\d\.,]+)([^\d\.,]*)$").expect("Invalid fuzzy amount regex"));
 
         let caps = re.captures(input.trim())?;
         let prefix = caps.get(1).map(|m| m.as_str()).unwrap_or("").trim();

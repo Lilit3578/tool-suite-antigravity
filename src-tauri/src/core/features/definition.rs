@@ -130,11 +130,11 @@ impl FeatureAsync for DefinitionFeature {
                 }
             }
             DefinitionAction::BriefDefinition => {
-                if response.definitions.is_empty() {
-                     String::new()
-                } else {
-                    let first_def = &response.definitions[0];
+                // Safe: Use get() instead of direct indexing to prevent panic
+                if let Some(first_def) = response.definitions.get(0) {
                     format!("{} ({}): {}", word, first_def.part_of_speech, first_def.definition)
+                } else {
+                    String::new()
                 }
             }
         };
@@ -151,18 +151,13 @@ impl FeatureAsync for DefinitionFeature {
 fn sanitize_word(text: &str) -> String {
     let lower = text.trim().to_lowercase();
     
-    // Strip common prefixes
-    let cleaned = if lower.starts_with("define ") {
-        lower.strip_prefix("define ").unwrap()
-    } else if lower.starts_with("def ") {
-        lower.strip_prefix("def ").unwrap()
-    } else if lower.starts_with("synonyms for ") {
-        lower.strip_prefix("synonyms for ").unwrap()
-    } else if lower.starts_with("antonyms for ") {
-        lower.strip_prefix("antonyms for ").unwrap()
-    } else {
-        &lower
-    };
+    // Safe: strip_prefix returns Option, use unwrap_or to fallback to original string
+    // This prevents panic if prefix check passes but strip_prefix fails (edge case)
+    let cleaned = lower.strip_prefix("define ")
+        .or_else(|| lower.strip_prefix("def "))
+        .or_else(|| lower.strip_prefix("synonyms for "))
+        .or_else(|| lower.strip_prefix("antonyms for "))
+        .unwrap_or(&lower);
 
     // Extract first valid word from the remainder
     cleaned.split_whitespace()

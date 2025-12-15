@@ -89,9 +89,6 @@ pub async fn hide_palette_window(app: tauri::AppHandle) -> AppResult<()> {
     Ok(())
 }
 
-// NOTE: focus_palette_window has been removed.
-// Non-activating panels should NOT be focused as it activates the app.
-// Use order_window_front() instead if you need to bring the window to front.
 
 /// Show a widget window
 #[tauri::command]
@@ -103,4 +100,10 @@ pub async fn show_widget(app: tauri::AppHandle, widget: String) -> AppResult<()>
     } else {
         Err(AppError::System("Window lock not available".to_string()))
     }
+}
+
+/// Debug command: Get window count (verification for singleton pattern)
+#[tauri::command]
+pub fn debug_window_count(app: tauri::AppHandle) -> AppResult<usize> {
+    Ok(app.webview_windows().len())
 }

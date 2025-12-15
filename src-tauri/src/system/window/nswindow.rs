@@ -26,6 +26,8 @@ use objc::{class, msg_send, sel, sel_impl};
 use block::ConcreteBlock;
 #[cfg(target_os = "macos")]
 use std::sync::{Arc, Mutex, mpsc};
+#[cfg(target_os = "macos")]
+use crate::system::window::handle::{SafeObjcHandle, WindowHandleManager};
 
 // Use semantic window level constants (no magic numbers)
 // These values are from NSWindow.h and ensure compatibility across OS versions
@@ -275,12 +277,17 @@ unsafe fn configure_for_fullscreen_overlay_main_thread(ns_window: id) -> Result<
     
     println!("🔵 [DEBUG] [Fullscreen] Configuring window for fullscreen overlay...");
     
-    // Validate it's NSWindow
+    // Safe: Validate pointer is still valid by checking if it responds to messages
+    // This helps detect use-after-free scenarios
     let ns_window_class: id = msg_send![class!(NSWindow), class];
     let is_kind_of_class: bool = msg_send![ns_window, isKindOfClass: ns_window_class];
     if !is_kind_of_class {
-        return Err("Provided pointer is not NSWindow".to_string());
+        return Err("Provided pointer is not NSWindow or has been deallocated".to_string());
     }
+    
+    // Additional validation: Check if window responds to basic messages
+    // This helps ensure the pointer is still valid
+    let _: bool = msg_send![ns_window, respondsToSelector: sel!(isVisible)];
 
     // Get current window level for debugging
     let current_level: i64 = msg_send![ns_window, level];
@@ -341,6 +348,63 @@ unsafe fn configure_for_fullscreen_overlay_main_thread(ns_window: id) -> Result<
 }
 
 
+/// Register a window handle in the handle manager
+/// 
+/// This should be called immediately after window creation to register
+/// the SafeObjcHandle for safe cross-thread access.
+/// 
+/// # Arguments
+/// * `window` - Tauri WebviewWindow reference
+/// * `window_label` - The window label (e.g., "palette-window")
+/// * `handle_manager` - The window handle manager from app state
+/// 
+/// # Returns
+/// * `Ok(Arc<SafeObjcHandle>)` if successful
+/// * `Err(String)` if registration fails
+#[cfg(target_os = "macos")]
+pub fn register_window_handle(
+    window: &tauri::WebviewWindow,
+    window_label: &str,
+    handle_manager: &WindowHandleManager,
+) -> Result<Arc<SafeObjcHandle>, String> {
+    // Get the raw NSWindow pointer from Tauri
+    let ns_window_ptr = window.ns_window()
+        .map_err(|e| format!("Failed to get NSWindow: {}", e))?;
+    
+    // Create SafeObjcHandle (this retains the Objective-C object)
+    // Safe: Cast *mut c_void to id (Objective-C object pointer)
+    let handle = unsafe {
+        SafeObjcHandle::new(ns_window_ptr as id)
+            .ok_or_else(|| "Failed to create SafeObjcHandle: null pointer".to_string())?
+    };
+    
+    let handle_arc = Arc::new(handle);
+    
+    // Register in handle manager
+    handle_manager.register(window_label, handle_arc.clone())
+        .map_err(|e| format!("Failed to register window handle: {}", e))?;
+    
+    println!("🔵 [DEBUG] [WindowHandle] Registered handle for window: {}", window_label);
+    Ok(handle_arc)
+}
+
+/// Get a window handle from the handle manager
+/// 
+/// # Arguments
+/// * `window_label` - The window label
+/// * `handle_manager` - The window handle manager from app state
+/// 
+/// # Returns
+/// * `Some(Arc<SafeObjcHandle>)` if handle exists
+/// * `None` if handle not found
+#[cfg(target_os = "macos")]
+pub fn get_window_handle(
+    window_label: &str,
+    handle_manager: &WindowHandleManager,
+) -> Option<Arc<SafeObjcHandle>> {
+    handle_manager.get(window_label)
+}
+
 /// Configure Tauri window for fullscreen overlay BEFORE showing
 /// 
 /// MINIMAL configuration - only sets window level and collection behavior.
@@ -351,12 +415,18 @@ unsafe fn configure_for_fullscreen_overlay_main_thread(ns_window: id) -> Result<
 /// 2. While window is still hidden
 /// 
 /// Sequence:
-/// - Window created (hidden) → Configure → THEN show()
+/// - Window created (hidden) → Register handle → Configure → THEN show()
 /// 
 /// # Arguments
 /// * `window` - Tauri WebviewWindow reference (must be hidden)
+/// * `window_label` - The window label for handle lookup
+/// * `handle_manager` - The window handle manager from app state
 #[cfg(target_os = "macos")]
-pub fn configure_for_fullscreen_overlay(window: &tauri::WebviewWindow) -> Result<(), String> {
+pub fn configure_for_fullscreen_overlay(
+    window: &tauri::WebviewWindow,
+    window_label: &str,
+    handle_manager: &WindowHandleManager,
+) -> Result<(), String> {
     // Verify window is hidden
     let is_visible = window.is_visible().unwrap_or(false);
     println!("🔵 [DEBUG] [Fullscreen] configure_for_fullscreen_overlay() called - window visible: {}", is_visible);
@@ -366,23 +436,30 @@ pub fn configure_for_fullscreen_overlay(window: &tauri::WebviewWindow) -> Result
         // Don't return error, just warn - might be reconfiguring existing window
     }
     
-    // Get the raw NSWindow pointer from Tauri
-    let ns_window_ptr = window.ns_window()
-        .map_err(|e| format!("Failed to get NSWindow: {}", e))?;
-    
-    println!("🔵 [DEBUG] [Fullscreen] Got NSWindow pointer: {:p}", ns_window_ptr);
-    
-    // Convert the raw pointer to usize for thread-safe transfer
-    let ns_window_usize = ns_window_ptr as usize;
+    // Get or create window handle
+    let handle = if let Some(existing_handle) = handle_manager.get(window_label) {
+        println!("🔵 [DEBUG] [Fullscreen] Using existing handle for window: {}", window_label);
+        existing_handle
+    } else {
+        // Register new handle
+        println!("🔵 [DEBUG] [Fullscreen] Registering new handle for window: {}", window_label);
+        register_window_handle(window, window_label, handle_manager)?
+    };
     
     // Dispatch to main thread and wait for result
     let (tx, rx) = mpsc::channel();
+    let handle_clone = handle.clone();
     
     println!("🔵 [DEBUG] [Fullscreen] Dispatching configuration to main thread...");
     run_on_main_thread(move || {
-        // Execute the configuration on the main thread
+        // Safe: Use SafeObjcHandle instead of raw pointer conversion
+        let ns_window = handle_clone.as_id();
         let res = unsafe {
-            configure_for_fullscreen_overlay_main_thread(ns_window_usize as id)
+            if ns_window.is_null() {
+                Err("Window pointer is null".to_string())
+            } else {
+                configure_for_fullscreen_overlay_main_thread(ns_window)
+            }
         };
         let _ = tx.send(res);
     });
@@ -405,25 +482,24 @@ pub fn configure_for_fullscreen_overlay(window: &tauri::WebviewWindow) -> Result
     }
 }
 
-/// Show window and ensure it stays visible over fullscreen apps
+/// Show window and ensure it stays visible over fullscreen apps (SAFE VERSION)
 /// 
-/// This function:
-/// 1. Ensures window level 25 (NSStatusWindowLevel) is set
-/// 2. Ensures collection behavior is CanJoinAllSpaces | FullScreenAuxiliary
-/// 3. Uses Tauri's normal window.show() (which may briefly activate the app)
-/// 
-/// The caller should restore focus to the original app immediately after calling this.
+/// This function uses SafeObjcHandle from the handle manager.
 #[cfg(target_os = "macos")]
-pub fn ensure_fullscreen_overlay_config(window: &tauri::WebviewWindow) -> Result<(), String> {
-    let ns_window_ptr = window.ns_window()
-        .map_err(|e| format!("Failed to get NSWindow: {}", e))?;
+pub fn ensure_fullscreen_overlay_config_with_handle(
+    window_label: &str,
+    handle_manager: &WindowHandleManager,
+) -> Result<(), String> {
+    let handle = handle_manager.get(window_label)
+        .ok_or_else(|| format!("Window handle not found for: {}", window_label))?;
     
-    let ns_window_usize = ns_window_ptr as usize;
     let (tx, rx) = mpsc::channel();
+    let handle_clone = handle.clone();
     
     run_on_main_thread(move || {
         unsafe {
-            let ns_window = ns_window_usize as id;
+            // Safe: Use SafeObjcHandle instead of raw pointer conversion
+            let ns_window = handle_clone.as_id();
             
             // Ensure window level is set to 25 (NSStatusWindowLevel) for fullscreen overlay
             let current_level: i64 = msg_send![ns_window, level];
@@ -434,10 +510,9 @@ pub fn ensure_fullscreen_overlay_config(window: &tauri::WebviewWindow) -> Result
             }
             
             // Ensure collection behavior is CanJoinAllSpaces | FullScreenAuxiliary (0x81)
-            // CanJoinAllSpaces makes window appear on ALL spaces (including fullscreen) without activating app
             let current_behavior: NSWindowCollectionBehavior = msg_send![ns_window, collectionBehavior];
             let desired_bits: u64 = NSWindowCollectionBehaviorCanJoinAllSpaces 
-                | NSWindowCollectionBehaviorFullScreenAuxiliary;  // 0x1 | 0x80 = 0x81
+                | NSWindowCollectionBehaviorFullScreenAuxiliary;
             let current_bits = current_behavior.bits();
             
             if current_bits != desired_bits {
@@ -458,61 +533,27 @@ pub fn ensure_fullscreen_overlay_config(window: &tauri::WebviewWindow) -> Result
     }
 }
 
-/// Show window using Tauri's normal API and restore focus to original app
-/// 
-/// This approach works WITH Tauri rather than against it:
-/// 1. Ensures window level 25 and collection behavior are set
-/// 2. Uses Tauri's window.show() (which may briefly activate the app)
-/// 3. Immediately restores focus to the original app
-/// 
-/// The window stays visible because of its high window level (25).
-#[cfg(target_os = "macos")]
-pub fn show_and_restore_focus(window: &tauri::WebviewWindow, original_app: Option<&str>) -> Result<(), String> {
-    // First, ensure the window is configured for fullscreen overlay
-    ensure_fullscreen_overlay_config(window)?;
-    
-    // Show the window using Tauri's normal API
-    // This may briefly activate the app, but that's acceptable
-    window.show()
-        .map_err(|e| format!("Failed to show window: {}", e))?;
-    
-    // If we have an original app name, restore focus to it immediately
-    if let Some(app_name) = original_app {
-        let app_name_owned = app_name.to_string();
-        tauri::async_runtime::spawn(async move {
-            // Use a small delay to let the window appear first
-            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-            
-            // Restore focus to the original app
-            println!("🔵 [DEBUG] [Fullscreen] Window shown, should restore focus to: {}", app_name_owned);
-            // Actual AppleScript implementation would go here
-        });
-    }
-    
-    Ok(())
-}
+// UNSAFE LEGACY FUNCTIONS DELETED
+// show_and_restore_focus() and order_window_front() removed
+// Use handle-based functions instead
 
-/// Order window to front without activating app (legacy function name - deprecated)
-/// 
-/// This function is deprecated. Use `show_and_restore_focus` instead.
-#[cfg(target_os = "macos")]
-pub fn order_window_front(window: &tauri::WebviewWindow) -> Result<(), String> {
-    ensure_fullscreen_overlay_config(window)
-}
-
-/// Verify window is actually visible and get its position
+/// Verify window is actually visible and get its position (SAFE VERSION)
 /// This helps debug why windows might not appear
 #[cfg(target_os = "macos")]
-pub fn verify_window_visibility(window: &tauri::WebviewWindow) -> Result<(bool, bool, f64, f64, f64, f64), String> {
-    let ns_window_ptr = window.ns_window()
-        .map_err(|e| format!("Failed to get NSWindow: {}", e))?;
+pub fn verify_window_visibility_with_handle(
+    window_label: &str,
+    handle_manager: &WindowHandleManager,
+) -> Result<(bool, bool, f64, f64, f64, f64), String> {
+    let handle = handle_manager.get(window_label)
+        .ok_or_else(|| format!("Window handle not found for: {}", window_label))?;
     
-    let ns_window_usize = ns_window_ptr as usize;
     let (tx, rx) = mpsc::channel();
+    let handle_clone = handle.clone();
     
     run_on_main_thread(move || {
         unsafe {
-            let ns_window = ns_window_usize as id;
+            // Safe: Use SafeObjcHandle instead of raw pointer conversion
+            let ns_window = handle_clone.as_id();
             let is_visible: bool = msg_send![ns_window, isVisible];
             let is_on_screen: bool = msg_send![ns_window, isOnActiveSpace];
             
@@ -546,21 +587,25 @@ pub fn verify_window_visibility(window: &tauri::WebviewWindow) -> Result<(bool, 
     }
 }
 
-/// Make the window key (give it focus) so user can type immediately
+/// Make the window key (give it focus) so user can type immediately (SAFE VERSION)
 /// 
 /// This makes the window the key window, which allows it to receive keyboard input.
 /// The window must already be visible for this to work.
 #[cfg(target_os = "macos")]
-pub fn make_window_key(window: &tauri::WebviewWindow) -> Result<(), String> {
-    let ns_window_ptr = window.ns_window()
-        .map_err(|e| format!("Failed to get NSWindow: {}", e))?;
+pub fn make_window_key_with_handle(
+    window_label: &str,
+    handle_manager: &WindowHandleManager,
+) -> Result<(), String> {
+    let handle = handle_manager.get(window_label)
+        .ok_or_else(|| format!("Window handle not found for: {}", window_label))?;
     
-    let ns_window_usize = ns_window_ptr as usize;
     let (tx, rx) = mpsc::channel();
+    let handle_clone = handle.clone();
     
     run_on_main_thread(move || {
         unsafe {
-            let ns_window = ns_window_usize as id;
+            // Safe: Use SafeObjcHandle instead of raw pointer conversion
+            let ns_window = handle_clone.as_id();
             
             // Check if window can become key
             let can_become_key: bool = msg_send![ns_window, canBecomeKeyWindow];
@@ -592,27 +637,30 @@ pub fn make_window_key(window: &tauri::WebviewWindow) -> Result<(), String> {
     }
 }
 
-/// Configure window for fullscreen overlay (call this immediately after window creation)
+/// Configure window for fullscreen overlay (SAFE VERSION)
 /// This sets the window level and collection behavior BEFORE showing
 #[cfg(target_os = "macos")]
-pub fn configure_window_for_fullscreen(window: &tauri::WebviewWindow) -> Result<(), String> {
-    let ns_window_ptr = window.ns_window()
-        .map_err(|e| format!("Failed to get NSWindow: {}", e))?;
+pub fn configure_window_for_fullscreen_with_handle(
+    window_label: &str,
+    handle_manager: &WindowHandleManager,
+) -> Result<(), String> {
+    let handle = handle_manager.get(window_label)
+        .ok_or_else(|| format!("Window handle not found for: {}", window_label))?;
     
-    let ns_window_usize = ns_window_ptr as usize;
     let (tx, rx) = mpsc::channel();
+    let handle_clone = handle.clone();
     
     run_on_main_thread(move || {
         unsafe {
-            let ns_window = ns_window_usize as id;
+            // Safe: Use SafeObjcHandle instead of raw pointer conversion
+            let ns_window = handle_clone.as_id();
             
             // Set window level to 25 (NSStatusWindowLevel)
             let _: () = msg_send![ns_window, setLevel: NS_STATUS_WINDOW_LEVEL];
             
             // Set collection behavior to CanJoinAllSpaces + FullScreenAuxiliary (0x81)
-            // CanJoinAllSpaces makes window appear on ALL spaces (including fullscreen)
             let desired_bits: u64 = NSWindowCollectionBehaviorCanJoinAllSpaces 
-                | NSWindowCollectionBehaviorFullScreenAuxiliary;  // 0x1 | 0x80 = 0x81
+                | NSWindowCollectionBehaviorFullScreenAuxiliary;
             let behavior = NSWindowCollectionBehavior::from_bits_truncate(desired_bits);
             let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
             
@@ -654,21 +702,31 @@ pub fn configure_window_for_fullscreen(window: &tauri::WebviewWindow) -> Result<
 /// 6. Activate app ignoring other apps
 /// 7. Make window key for keyboard input
 
+/// Show window over fullscreen apps using handle manager (NEW SAFE VERSION)
+/// 
+/// This version uses SafeObjcHandle from the handle manager instead of
+/// unsafe pointer conversions.
 #[cfg(target_os = "macos")]
-pub fn show_window_over_fullscreen(window: &tauri::WebviewWindow) -> Result<(), String> {
+pub fn show_window_over_fullscreen_with_handle(
+    window: &tauri::WebviewWindow,
+    window_label: &str,
+    handle_manager: &WindowHandleManager,
+) -> Result<(), String> {
     println!("🔵 [DEBUG] [show_window_over_fullscreen] ═══════════════════════════════");
-    println!("🔵 [DEBUG] [show_window_over_fullscreen] 🚀 PANEL-LIKE CONFIGURATION");
+    println!("🔵 [DEBUG] [show_window_over_fullscreen] 🚀 PANEL-LIKE CONFIGURATION (SAFE)");
     println!("🔵 [DEBUG] [show_window_over_fullscreen] ═══════════════════════════════");
     
-    let ns_window_ptr = window.ns_window()
-        .map_err(|e| format!("Failed to get NSWindow: {}", e))?;
+    // Get window handle from manager
+    let handle = handle_manager.get(window_label)
+        .ok_or_else(|| format!("Window handle not found for: {}", window_label))?;
     
-    let ns_window_usize = ns_window_ptr as usize;
     let (tx, rx) = mpsc::channel();
+    let handle_clone = handle.clone();
     
     run_on_main_thread(move || {
         unsafe {
-            let ns_window = ns_window_usize as id;
+            // Safe: Use SafeObjcHandle instead of raw pointer conversion
+            let ns_window = handle_clone.as_id();
             
             println!("🔵 [DEBUG] Configuring NSWindow with panel-like behavior...");
             
@@ -733,24 +791,34 @@ pub fn show_window_over_fullscreen(window: &tauri::WebviewWindow) -> Result<(), 
     }
 }
 
-// Stub for non-macOS platforms
+// UNSAFE LEGACY FUNCTION DELETED
+// Use show_window_over_fullscreen_with_handle() instead
+
 #[cfg(not(target_os = "macos"))]
-pub fn show_window_over_fullscreen(_window: &tauri::WebviewWindow) -> Result<(), String> {
-    Err("show_window_over_fullscreen only supported on macOS".to_string())
+pub fn show_window_over_fullscreen_with_handle(
+    _window: &tauri::WebviewWindow,
+    _window_label: &str,
+    _handle_manager: &WindowHandleManager,
+) -> Result<(), String> {
+    Err("show_window_over_fullscreen_with_handle only supported on macOS".to_string())
 }
 
-/// Get native window state for debugging
+/// Get native window state for debugging (SAFE VERSION)
 #[cfg(target_os = "macos")]
-pub fn get_native_window_state(window: &tauri::WebviewWindow) -> Result<(bool, bool, bool, bool, bool), String> {
-    let ns_window_ptr = window.ns_window()
-        .map_err(|e| format!("Failed to get NSWindow: {}", e))?;
+pub fn get_native_window_state_with_handle(
+    window_label: &str,
+    handle_manager: &WindowHandleManager,
+) -> Result<(bool, bool, bool, bool, bool), String> {
+    let handle = handle_manager.get(window_label)
+        .ok_or_else(|| format!("Window handle not found for: {}", window_label))?;
     
-    let ns_window_usize = ns_window_ptr as usize;
     let (tx, rx) = mpsc::channel();
+    let handle_clone = handle.clone();
     
     run_on_main_thread(move || {
         unsafe {
-            let ns_window = ns_window_usize as id;
+            // Safe: Use SafeObjcHandle instead of raw pointer conversion
+            let ns_window = handle_clone.as_id();
             let is_visible: bool = msg_send![ns_window, isVisible];
             let is_key: bool = msg_send![ns_window, isKeyWindow];
             let is_main: bool = msg_send![ns_window, isMainWindow];
@@ -767,40 +835,97 @@ pub fn get_native_window_state(window: &tauri::WebviewWindow) -> Result<(bool, b
     }
 }
 
-// Stubs for non-macOS
+// Stubs for non-macOS - safe handle-based versions
 #[cfg(not(target_os = "macos"))]
-pub fn configure_as_non_activating_panel(_window: &tauri::WebviewWindow) -> Result<(), String> {
-    Err("NSPanel configuration only supported on macOS".to_string())
+pub fn configure_window_for_fullscreen_with_handle(
+    _window_label: &str,
+    _handle_manager: &WindowHandleManager,
+) -> Result<(), String> {
+    Err("configure_window_for_fullscreen_with_handle only supported on macOS".to_string())
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn order_window_front(_window: &tauri::WebviewWindow) -> Result<(), String> {
-    Err("order_window_front only supported on macOS".to_string())
+pub fn show_window_over_fullscreen_with_handle(
+    _window: &tauri::WebviewWindow,
+    _window_label: &str,
+    _handle_manager: &WindowHandleManager,
+) -> Result<(), String> {
+    Err("show_window_over_fullscreen_with_handle only supported on macOS".to_string())
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn make_window_key(_window: &tauri::WebviewWindow) -> Result<(), String> {
-    Err("make_window_key only supported on macOS".to_string())
+pub fn verify_window_visibility_with_handle(
+    _window_label: &str,
+    _handle_manager: &WindowHandleManager,
+) -> Result<(bool, bool, f64, f64, f64, f64), String> {
+    Err("verify_window_visibility_with_handle only supported on macOS".to_string())
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn configure_window_for_fullscreen(_window: &tauri::WebviewWindow) -> Result<(), String> {
-    Err("configure_window_for_fullscreen only supported on macOS".to_string())
+pub fn make_window_key_with_handle(
+    _window_label: &str,
+    _handle_manager: &WindowHandleManager,
+) -> Result<(), String> {
+    Err("make_window_key_with_handle only supported on macOS".to_string())
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn show_window_over_fullscreen(_window: &tauri::WebviewWindow) -> Result<(), String> {
-    Err("show_window_over_fullscreen only supported on macOS".to_string())
+pub fn get_native_window_state_with_handle(
+    _window_label: &str,
+    _handle_manager: &WindowHandleManager,
+) -> Result<(bool, bool, bool, bool, bool), String> {
+    Err("get_native_window_state_with_handle only supported on macOS".to_string())
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn verify_window_visibility(_window: &tauri::WebviewWindow) -> Result<(bool, bool, f64, f64, f64, f64), String> {
-    Err("verify_window_visibility only supported on macOS".to_string())
+pub fn ensure_fullscreen_overlay_config_with_handle(
+    _window_label: &str,
+    _handle_manager: &WindowHandleManager,
+) -> Result<(), String> {
+    Err("ensure_fullscreen_overlay_config_with_handle only supported on macOS".to_string())
+}
+
+/// Force window to front and ensure app activation (CRITICAL FIX for Accessory Mode)
+/// 
+/// This solves the "Ghost Window" issue where the window appears but lacks focus because
+/// the app is in Accessory mode (LSUIElement=1) and doesn't automatically activate.
+/// 
+/// Operations:
+/// 1. activateIgnoringOtherApps:YES - Forces app to foreground
+/// 2. makeKeyAndOrderFront:nil - Makes window key and visible
+/// 3. orderFrontRegardless - Overrides any window server hesitation
+#[cfg(target_os = "macos")]
+pub fn force_window_to_front(window: &tauri::WebviewWindow) {
+    use cocoa::appkit::NSApplication;
+    use cocoa::base::{nil, YES};
+    
+    let window_clone = window.clone();
+    
+    // Dispatch to main thread for safety
+    run_on_main_thread(move || {
+        unsafe {
+            // 1. Force Activate App
+            let ns_app = cocoa::appkit::NSApp();
+            let _: () = msg_send![ns_app, activateIgnoringOtherApps: YES];
+            
+            // 2. Get Window Handle
+            let ns_window: id = window_clone.ns_window().unwrap() as id;
+            
+            // 3. Make Key and Order Front
+            let _: () = msg_send![ns_window, makeKeyAndOrderFront: nil];
+            
+            // 4. Order Front Regardless (Safety net for spaces/occlusion)
+            let _: () = msg_send![ns_window, orderFrontRegardless];
+            
+            println!("🔵 [DEBUG] [ForceActivation] 🚀 Forced app activation and window focus");
+        }
+    });
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn get_native_window_state(_window: &tauri::WebviewWindow) -> Result<(bool, bool, bool, bool, bool), String> {
-    Err("Native window state only available on macOS".to_string())
+pub fn force_window_to_front(window: &tauri::WebviewWindow) {
+    window.show().unwrap();
+    window.set_focus().unwrap();
 }
 
 #[cfg(test)]

@@ -107,7 +107,7 @@ export function TextAnalyserWidget() {
         subValue = null,
         copyValue
     }: {
-        icon: any,
+        icon: React.ElementType,
         label: string,
         value: string | number,
         subValue?: string | null,

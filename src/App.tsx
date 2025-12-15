@@ -16,8 +16,8 @@ function App() {
   useEffect(() => {
     // Get widget type from URL params
     const params = new URLSearchParams(window.location.search);
-    const widgetType = params.get("widget") || "palette";
-    setCurrentWidget(widgetType as any);
+    const widgetType = (params.get("widget") || "palette") as import("./logic/state/store").WidgetType;
+    setCurrentWidget(widgetType);
 
     // Load settings
     api
@@ -54,6 +54,24 @@ function App() {
       };
     }
   }, [currentWidget]);
+
+  // Global Escape key handler to close widgets (mimic click-outside behavior)
+  useEffect(() => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        // console.log("Escape key pressed - closing window");
+        try {
+          const { getCurrentWindow } = await import("@tauri-apps/api/window");
+          await getCurrentWindow().close();
+        } catch (err) {
+          console.error("Failed to close window:", err);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Render the appropriate widget
   switch (currentWidget) {

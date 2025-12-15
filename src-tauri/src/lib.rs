@@ -358,6 +358,7 @@ pub fn run() {
             api::commands::window::calculate_palette_position,
             api::commands::window::hide_palette_window,
             api::commands::window::show_widget,
+            api::commands::window::debug_window_count,
             // System commands
             api::commands::system::get_active_app,
             api::commands::system::check_accessibility_permissions,
@@ -409,13 +410,8 @@ async fn show_widget_window_async(
     
     let window_label = format!("{}-window", widget);
     
-    // Hide palette if opening a different widget
-    if widget != "palette" {
-        if let Some(palette) = app.get_webview_window("palette-window") {
-            println!("[Window] Hiding palette before opening {}", widget);
-            palette.hide().map_err(|e| format!("Failed to hide palette: {}", e))?;
-        }
-    }
+    // Hide palette logic MOVED to after show to prevent deactivation
+    // if widget != "palette" { ... } 
     
     // Get window configuration from registry (no hardcoded tuples)
     let config = config::get_window_config(widget);
@@ -425,53 +421,31 @@ async fn show_widget_window_async(
     let _transparent = config.transparent;
     let _decorations = config.decorations;
     
-    // Check if window already exists
+    // SINGLETON PATTERN: O(1) lookup - check if window already exists
     if let Some(window) = app.get_webview_window(&window_label) {
-        println!("🔵 [DEBUG] [show_widget_window] Window '{}' already exists", window_label);
+        println!("♻️ [Singleton] Reusing existing widget: {}", window_label);
         
-        if widget == "palette" {
-            // Reset size
-            window.set_size(tauri::Size::Logical(tauri::LogicalSize {
-                width: width as f64,
-                height: height as f64,
-            })).ok();
-            
-            // CRITICAL: Configure and show ONCE - no verification or retry (internal retry handles it)
-            #[cfg(target_os = "macos")]
-            {
-                system::window::nswindow::configure_window_for_fullscreen(&window).ok();
-                system::window::nswindow::show_window_over_fullscreen(&window).ok();
-                // That's it! Internal retry handles the rest
+        // IDEMPOTENT OPERATION: Simply show and focus - no re-initialization
+        // Window is already configured from initial creation, so we just toggle visibility
+        
+        // FIX: Use force_window_to_front instead of standard show/focus
+        // This ensures the app activates even in Accessory mode
+        system::window::nswindow::force_window_to_front(&window);
+        
+        // For non-palette widgets, center on show (idempotent)
+        if widget != "palette" {
+            window.center().ok();
+        }
+        
+        // CRITICAL FIX: Hide palette AFTER showing the new window
+        // This prevents the "zero windows visible" state which causes the OS to deactivate the app
+        if widget != "palette" {
+            if let Some(palette) = app.get_webview_window("palette-window") {
+                println!("[Window] Hiding palette AFTER opening {}", widget);
+                // Delay slightly to ensure new window has taken focus? 
+                // No, standard execution order should be fine because force_window_to_front activates the app
+                palette.hide().map_err(|e| format!("Failed to hide palette: {}", e))?;
             }
-            
-            #[cfg(not(target_os = "macos"))]
-            {
-                window.set_always_on_top(true).ok();
-                window.show().ok();
-            }
-            
-            // Increased delay for full transition to complete
-            tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
-        } else {
-            // CRITICAL FIX: Configure and show ALL widgets over fullscreen
-            #[cfg(target_os = "macos")]
-            {
-                system::window::nswindow::configure_window_for_fullscreen(&window).ok();
-                // FORCE CENTER every time it's shown
-                window.center().ok();
-                system::window::nswindow::show_window_over_fullscreen(&window).ok();
-                // That's it! Internal retry handles the rest
-            }
-            
-            #[cfg(not(target_os = "macos"))]
-            {
-                window.center().ok();
-                window.set_always_on_top(true).ok();
-                window.show().ok();
-            }
-            
-            // Increased delay for full transition to complete
-            tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
         }
         
         println!("🔵 [DEBUG] [show_widget_window] 🔓 Lock released");
@@ -479,7 +453,22 @@ async fn show_widget_window_async(
     }
     
     // Continue to new window creation...
-    show_widget_window_create_new_async(app, widget, has_selection).await
+    show_widget_window_create_new_async(app, widget, has_selection).await?;
+    
+    // CRITICAL FIX FOR NEW WINDOWS TOO: Hide palette AFTER showing the new window
+    // This logic must be here to cover both Reuse (above) and Create New (here) paths check?
+    // Actually, I put the logic inside the Reuse block. I need to replicate it here or move it out.
+    // Better to move it out to a common place at the end, but the Reuse block returns early.
+    // So I will just add it here for the Create New path.
+    
+    if widget != "palette" {
+        if let Some(palette) = app.get_webview_window("palette-window") {
+            println!("[Window] Hiding palette AFTER creating/showing {}", widget);
+            palette.hide().map_err(|e| format!("Failed to hide palette: {}", e))?;
+        }
+    }
+    
+    Ok(())
 }
 
 // Sync wrapper for menu items (they can't be async)
@@ -503,125 +492,24 @@ fn show_widget_window(app: &tauri::AppHandle, widget: &str, has_selection: bool)
         // Return immediately (fire and forget for sync callers)
         Ok(())
     } else {
-        // Fallback: call legacy implementation if lock not available
-        show_widget_window_legacy(app, widget, has_selection)
+        // Fallback: spawn async task without lock
+        let app_clone = app.clone();
+        let widget_str = widget.to_string();
+        
+        tauri::async_runtime::spawn(async move {
+            // Create a temporary lock for this operation
+            let temp_lock = std::sync::Arc::new(tokio::sync::Mutex::new(()));
+            match show_widget_window_async(&app_clone, &widget_str, has_selection, temp_lock).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("Failed to show window '{}': {}", widget_str, e),
+            }
+        });
+        
+        Ok(())
     }
 }
 
-// Legacy implementation (kept for fallback)
-fn show_widget_window_legacy(app: &tauri::AppHandle, widget: &str, has_selection: bool) -> Result<(), String> {
-    let window_label = format!("{}-window", widget);
-    
-    // Hide palette if opening a different widget
-    if widget != "palette" {
-        if let Some(palette) = app.get_webview_window("palette-window") {
-            println!("[Window] Hiding palette before opening {}", widget);
-            palette.hide().map_err(|e| format!("Failed to hide palette: {}", e))?;
-        }
-    }
-    
-    // Get window configuration from registry (no hardcoded tuples)
-    let config = config::get_window_config(widget);
-    let width = config.width as u32;
-    let height = config.height as u32;
-    let _title = config.title;
-    let _transparent = config.transparent;
-    let _decorations = config.decorations;
-    
-    // Check if window already exists
-    if let Some(window) = app.get_webview_window(&window_label) {
-        println!("🔵 [DEBUG] [show_widget_window] Window '{}' already exists", window_label);
-        
-        
-        // For palette window, reset size to ensure stability
-        println!("🔴🔴🔴 [CRITICAL DEBUG] widget = '{}', checking if == 'palette'", widget);
-        if widget == "palette" {
-            println!("🔴🔴🔴 [CRITICAL DEBUG] INSIDE PALETTE BLOCK - THIS SHOULD APPEAR!");
-            println!("🔵 [DEBUG] [show_widget_window] Resetting palette window size to {}x{}", width, height);
-            if let Err(e) = window.set_size(tauri::Size::Logical(tauri::LogicalSize {
-                width: width as f64,
-                height: height as f64,
-            })) {
-                eprintln!("Failed to set window size: {}", e);
-            }
-            
-            // For existing palette window, configure for fullscreen overlay
-            println!("🔵 [DEBUG] [show_widget_window] Configuring existing palette window...");
-            
-            // CRITICAL: Use native method to show window over fullscreen
-            #[cfg(target_os = "macos")]
-            {
-                match system::window::nswindow::show_window_over_fullscreen(&window) {
-                    Ok(_) => {
-                        println!("🔵 [DEBUG] [show_widget_window] ✓ Window shown over fullscreen successfully");
-                        
-                        // Verify visibility
-                        if let Ok((is_visible, is_on_active_space, _, _, _, _)) = system::window::nswindow::verify_window_visibility(&window) {
-                            if is_visible && is_on_active_space {
-                                println!("🔵 [DEBUG] [show_widget_window] ✅ Window is visible on active space!");
-                            } else {
-                                eprintln!("🔴 [DEBUG] [show_widget_window] ⚠️  Visibility issue: visible={}, onActiveSpace={}", is_visible, is_on_active_space);
-                            }
-                        }
-                    },
-                Err(e) => {
-                        eprintln!("🔴 [DEBUG] [show_widget_window] ⚠️  Failed to show over fullscreen: {}", e);
-                    // Fallback
-                        window.set_always_on_top(true).ok();
-                        window.show().ok();
-                    }
-                }
-            }
-            
-            #[cfg(not(target_os = "macos"))]
-            {
-                window.set_always_on_top(true).ok();
-                window.show().ok();
-            }
-                    
-            let window_clone = window.clone();
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                // Focus logic if needed
-            });
-                            } else {
-            println!("🔵 [DEBUG] [show_widget_window] Showing non-palette widget '{}'...", widget);
-            
-            // CRITICAL FIX: Use native method to show all widgets over fullscreen
-            #[cfg(target_os = "macos")]
-            {
-                match system::window::nswindow::show_window_over_fullscreen(&window) {
-                    Ok(_) => {
-                        println!("🔵 [DEBUG] [show_widget_window] ✓ Widget '{}' shown over fullscreen successfully", widget);
-                        window.center().ok(); // Force center
-                    },
-                        Err(e) => {
-                        eprintln!("🔴 [DEBUG] [show_widget_window] ⚠️  Failed to show widget '{}' over fullscreen: {}", widget, e);
-                    // Fallback
-                        window.center().ok();
-                        window.set_always_on_top(true).ok();
-                        window.show().ok();
-                        window.set_focus().ok();
-                    }
-                }
-            }
-            
-            #[cfg(not(target_os = "macos"))]
-            {
-                window.center().ok();
-                window.set_always_on_top(true).ok();
-                window.show().ok();
-                window.set_focus().ok();
-            }
-        }
-        
-        println!("🔵 [DEBUG] [show_widget_window] Returning early (window already existed)");
-        return Ok(());
-    }
-    
-    // Create new window (sync version for legacy)
-    show_widget_window_create_new_legacy(app, widget, has_selection)
-}
+
 
 // Create new window (async version)
 async fn show_widget_window_create_new_async(app: &tauri::AppHandle, widget: &str, has_selection: bool) -> Result<(), String> {
@@ -644,14 +532,15 @@ async fn show_widget_window_create_new_async(app: &tauri::AppHandle, widget: &st
     // For palette, start invisible to prevent flash, then show after transparency is ready
     // CRITICAL: For palette, create window HIDDEN so we can convert to NSPanel before showing
     // Sequence: build (hidden) → convert to NSPanel → configure → THEN show()
-    let start_visible = widget != "palette";
+    // UPDATE: Now we do this for ALL widgets to support fullscreen overlay
+    let start_visible = false;
     let mut builder = WebviewWindowBuilder::new(app, &window_label, WebviewUrl::App(format!("index.html?widget={}", widget).into()))
         .title(title)
         .inner_size(width as f64, height as f64)
         .resizable(is_resizable)
         .focused(false)  // CRITICAL: Don't focus before configuration (macOS rejects it in fullscreen)
         .always_on_top(widget == "palette")  // Fallback
-        .visible(start_visible)  // Palette starts hidden, other widgets can be visible
+        .visible(start_visible)  // Start hidden to allow configuration
         .transparent(true)  // All windows start transparent
         .decorations(false)  // All windows start without decorations
         .skip_taskbar(true);  // Don't show in Dock/taskbar
@@ -772,15 +661,29 @@ async fn show_widget_window_create_new_async(app: &tauri::AppHandle, widget: &st
     
         // CRITICAL FIX: Configure ALL widgets for fullscreen overlay IMMEDIATELY after creation
         // This ensures translator, currency, clipboard, settings, etc. all appear over fullscreen apps
-        if widget == "palette" || widget == "translator" || widget == "currency" || widget == "clipboard" || widget == "settings" || widget == "time_converter" || widget == "unit_converter" || widget == "definition" {
+        // NOTE: This configuration happens ONCE during creation - singleton reuse skips this
+        if widget == "palette" || widget == "translator" || widget == "currency" || widget == "clipboard" || widget == "settings" || widget == "time_converter" || widget == "unit_converter" || widget == "definition" || widget == "text_analyser" {
             println!("🔵 [DEBUG] [show_widget_window] Configuring widget '{}' for fullscreen overlay...", widget);
             
-            // CRITICAL: Configure and show ONCE - no verification or retry (internal retry handles it)
+            // CRITICAL: Configure using handle manager (only during creation)
             #[cfg(target_os = "macos")]
             {
-                system::window::nswindow::configure_window_for_fullscreen(&window).ok();
-                system::window::nswindow::show_window_over_fullscreen(&window).ok();
-                // That's it! Internal retry handles the rest
+                if let Some(handle_manager) = app.try_state::<system::window::handle::WindowHandleManager>() {
+                    // Register handle first
+                    if let Err(e) = system::window::nswindow::register_window_handle(&window, &window_label, handle_manager.inner()) {
+                        eprintln!("⚠️ [WindowHandle] Failed to register handle: {}", e);
+                    }
+                    
+                    // Configure using handle manager
+                    if let Err(e) = system::window::nswindow::configure_for_fullscreen_overlay(&window, &window_label, handle_manager.inner()) {
+                        eprintln!("⚠️ [Fullscreen] Configuration failed: {}", e);
+                    }
+                    
+                    // Show using handle manager
+                    if let Err(e) = system::window::nswindow::show_window_over_fullscreen_with_handle(&window, &window_label, handle_manager.inner()) {
+                        eprintln!("⚠️ [Fullscreen] Failed to show window: {}", e);
+                    }
+                }
             }
             
             #[cfg(not(target_os = "macos"))]
@@ -793,39 +696,45 @@ async fn show_widget_window_create_new_async(app: &tauri::AppHandle, widget: &st
             // Increased delay for full transition to complete
             tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
             
+            // CRITICAL FIX: Force window to front after creation/configuration
+            // This ensures the window is actually key and active, preventing "Double Press" bug
+            println!("🔵 [DEBUG] [show_widget_window] Forcing new window '{}' to front...", widget);
+            system::window::nswindow::force_window_to_front(&window);
+            
             println!("🔵 [DEBUG] [show_widget_window] Widget '{}' creation complete", widget);
     }
     
-    // Add blur event listener for click-outside behavior (except palette)
-    if widget != "palette" {
-        let window_clone = window.clone();
-        window.on_window_event(move |event| {
-            if let tauri::WindowEvent::Focused(false) = event {
-                // Window lost focus - hide it
+    // Fallback for widgets NOT in the whitelist (if any)
+    // We should probably force them too if they are just created?
+    // But currently all widgets seem to be in the whitelist.
+    
+    // SINGLETON PATTERN: Register event listeners ONCE during creation only
+    // This prevents the closure stack overflow leak from duplicate registrations
+    let window_clone = window.clone();
+    let widget_clone = widget.to_string();
+    
+    window.on_window_event(move |event| {
+        match event {
+            // Hide window on blur (except palette)
+            tauri::WindowEvent::Focused(false) if widget_clone != "palette" => {
                 let _ = window_clone.hide();
             }
-        });
-    }
-
-    Ok(())
-}
-
-// Create new window (sync version for legacy fallback)
-// FIXED: Use spawn instead of block_on to avoid runtime conflicts
-fn show_widget_window_create_new_legacy(app: &tauri::AppHandle, widget: &str, has_selection: bool) -> Result<(), String> {
-    // Spawn async task instead of blocking
-    let app_clone = app.clone();
-    let widget_str = widget.to_string();
-    
-    tauri::async_runtime::spawn(async move {
-        if let Err(e) = show_widget_window_create_new_async(&app_clone, &widget_str, has_selection).await {
-            eprintln!("Failed to create window '{}': {}", widget_str, e);
+            
+            // THE FIX: Never destroy, always hide (O(1) toggle, not O(N) re-init)
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                api.prevent_close(); // Prevent actual destruction
+                let _ = window_clone.hide(); // Hide instead (preserves singleton)
+                println!("🔵 [Singleton] Window '{}' hidden (not destroyed) - ready for reuse", widget_clone);
+            }
+            
+            _ => {}
         }
     });
-    
-    // Return immediately (fire and forget)
+
     Ok(())
 }
+
+
 
 // NOTE: The create_floating_panel function has been removed.
 // We now configure Tauri windows directly as non-activating panels

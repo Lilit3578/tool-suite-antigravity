@@ -38,9 +38,9 @@ export function UnitConverterWidget() {
     useEffect(() => {
         const loadUnits = async () => {
             try {
-                console.log("[UnitConverter] Loading units from backend...");
+                // console.log("[UnitConverter] Loading units from backend...");
                 const response = await api.getAllUnits();
-                console.log("[UnitConverter] Loaded units:", response.units.length);
+                // console.log("[UnitConverter] Loaded units:", response.units.length);
                 setAllUnits(response.units);
             } catch (e) {
                 console.error("[UnitConverter] Failed to load units:", e);
@@ -58,15 +58,15 @@ export function UnitConverterWidget() {
 
         const loadText = async () => {
             try {
-                console.log("[UnitConverter] Capturing text selection...");
+                // console.log("[UnitConverter] Capturing text selection...");
                 const clipboardResult = await api.captureSelection("clipboard");
-                console.log("[UnitConverter] Captured text:", clipboardResult.text);
+                // console.log("[UnitConverter] Captured text:", clipboardResult.text);
 
                 if (clipboardResult.text && clipboardResult.text.trim()) {
                     try {
-                        console.log("[UnitConverter] Parsing text:", clipboardResult.text);
+                        // console.log("[UnitConverter] Parsing text:", clipboardResult.text);
                         const parsed = await api.parseTextCommand(clipboardResult.text);
-                        console.log("[UnitConverter] Parsed result:", parsed);
+                        // console.log("[UnitConverter] Parsed result:", parsed);
 
                         setAmount(String(parsed.amount));
                         setFromUnitId(parsed.unit);
@@ -74,19 +74,30 @@ export function UnitConverterWidget() {
                         // Apply smart default target
                         const smartTarget = SMART_DEFAULT_TARGETS[parsed.unit];
                         if (smartTarget) {
-                            console.log("[UnitConverter] Applying smart target:", smartTarget);
+                            // console.log("[UnitConverter] Applying smart target:", smartTarget);
                             setToUnitId(smartTarget);
                         }
                         return;
                     } catch (parseError) {
-                        console.log("[UnitConverter] Could not parse clipboard text:", parseError);
+                        // console.log("[UnitConverter] Could not parse clipboard text:", parseError);
                     }
                 }
             } catch (e) {
                 console.error("[UnitConverter] Failed to load text:", e);
             }
         };
+
+        // Initial load
         loadText();
+
+        // Listen for window focus to re-capture text (since window is reused)
+        const handleFocus = () => {
+            // console.log("[UnitConverter] Window focused - reloading text");
+            loadText();
+        };
+
+        window.addEventListener("focus", handleFocus);
+        return () => window.removeEventListener("focus", handleFocus);
     }, [allUnits]); // Depend on allUnits so this runs after units load
 
     // Auto-convert with debounce
@@ -105,13 +116,13 @@ export function UnitConverterWidget() {
             }
 
             try {
-                console.log("[UnitConverter] Converting:", numAmount, fromUnitId, "→", toUnitId);
+                // console.log("[UnitConverter] Converting:", numAmount, fromUnitId, "→", toUnitId);
                 const response = await api.convertUnitsCommand({
                     amount: numAmount,
                     from_unit: fromUnitId,
                     to_unit: toUnitId,
                 });
-                console.log("[UnitConverter] Conversion result:", response.formatted_result);
+                // console.log("[UnitConverter] Conversion result:", response.formatted_result);
                 setResult(response.formatted_result);
             } catch (err) {
                 console.error("[UnitConverter] Conversion failed:", err);
@@ -147,12 +158,12 @@ export function UnitConverterWidget() {
                         onChange={(val) => {
                             const unit = allUnits.find(u => u.label === val);
                             if (unit) {
-                                console.log("[UnitConverter] Changed FROM unit to:", unit.id);
+                                // console.log("[UnitConverter] Changed FROM unit to:", unit.id);
                                 setFromUnitId(unit.id);
                                 // Apply smart default target
                                 const smartTarget = SMART_DEFAULT_TARGETS[unit.id];
                                 if (smartTarget && allUnits.some(u => u.id === smartTarget)) {
-                                    console.log("[UnitConverter] Auto-setting TO unit to:", smartTarget);
+                                    // console.log("[UnitConverter] Auto-setting TO unit to:", smartTarget);
                                     setToUnitId(smartTarget);
                                 }
                             }
@@ -182,7 +193,7 @@ export function UnitConverterWidget() {
                         onChange={(val) => {
                             const unit = allUnits.find(u => u.label === val);
                             if (unit) {
-                                console.log("[UnitConverter] Changed TO unit to:", unit.id);
+                                // console.log("[UnitConverter] Changed TO unit to:", unit.id);
                                 setToUnitId(unit.id);
                             }
                         }}

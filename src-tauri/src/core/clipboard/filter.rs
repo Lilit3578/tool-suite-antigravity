@@ -10,17 +10,17 @@ fn get_secret_patterns() -> &'static Vec<Regex> {
     SECRET_PATTERNS.get_or_init(|| {
         vec![
             // GitHub Personal Access Token
-            Regex::new(r"ghp_[a-zA-Z0-9]{36}").unwrap(),
+            Regex::new(r"ghp_[a-zA-Z0-9]{36}").expect("Invalid GitHub token regex"),
             // Stripe Live Key
-            Regex::new(r"sk_live_[a-zA-Z0-9]{24}").unwrap(),
+            Regex::new(r"sk_live_[a-zA-Z0-9]{24}").expect("Invalid Stripe key regex"),
             // Slack Token
-            Regex::new(r"xox[baprs]-[a-zA-Z0-9]{10,48}").unwrap(),
+            Regex::new(r"xox[baprs]-[a-zA-Z0-9]{10,48}").expect("Invalid Slack token regex"),
             // AWS Access Key ID
-            Regex::new(r"AKIA[0-9A-Z]{16}").unwrap(),
+            Regex::new(r"AKIA[0-9A-Z]{16}").expect("Invalid AWS ID regex"),
             // Google API Key (Basic check)
-            Regex::new(r"AIza[0-9A-Za-z-_]{35}").unwrap(),
+            Regex::new(r"AIza[0-9A-Za-z-_]{35}").expect("Invalid Google API key regex"),
             // Generic Private Key Block
-            Regex::new(r"-----BEGIN (RSA|DSA|EC|PGP|OPENSSH) PRIVATE KEY-----").unwrap(),
+            Regex::new(r"-----BEGIN (RSA|DSA|EC|PGP|OPENSSH) PRIVATE KEY-----").expect("Invalid Private Key regex"),
         ]
     })
 }
@@ -63,7 +63,8 @@ pub fn is_sensitive(content: &str, source_app: Option<&str>) -> bool {
     let patterns = get_secret_patterns();
     for pattern in patterns {
         if pattern.is_match(content) {
-            println!("[ClipboardFilter] Blocking sensitive content matching pattern: {}", pattern.as_str());
+            // SECURITY: Never log sensitive content or pattern details
+            eprintln!("[SECURITY] Blocked sensitive content matching pattern: [REDACTED]");
             return true;
         }
     }

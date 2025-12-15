@@ -512,7 +512,9 @@ fn detect_timezone_from_text(text: &str) -> Option<(String, Option<String>)> {
             let rank_b = preferred_timezones.iter().position(|&p| p == id_b).unwrap_or(999);
             rank_a.cmp(&rank_b)
         });
-        return Some(candidates[0].clone());
+        // Safe: Use get() instead of direct indexing to prevent panic if candidates is empty
+        // Return tuple: (iana_id, matched_keyword)
+        return candidates.get(0).map(|(id, keyword)| (id.clone(), keyword.clone()));
     }
     
     // Strategy 3: Check for city/country names

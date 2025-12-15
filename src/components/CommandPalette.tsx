@@ -86,11 +86,8 @@ export function CommandPalette() {
     // ✅ CRITICAL: Reset palette state on every window focus (when user opens palette)
     useEffect(() => {
         const handleWindowFocus = async () => {
-            console.log("🔵 [DEBUG] [CommandPalette] ========== WINDOW FOCUS EVENT ==========");
-            console.log("🔵 [DEBUG] [CommandPalette] Window focused - resetting palette state");
-            console.log("🔵 [DEBUG] [CommandPalette] document.hasFocus():", document.hasFocus());
-            console.log("🔵 [DEBUG] [CommandPalette] document.activeElement:", document.activeElement);
-            console.log("🔵 [DEBUG] [CommandPalette] inputRef.current:", inputRef.current);
+            // console.log("🔵 [DEBUG] [CommandPalette] ========== WINDOW FOCUS EVENT ==========");
+            // console.log("🔵 [DEBUG] [CommandPalette] Window focused - resetting palette state");
 
             resetPalette(); // ← Clear search query and selection
 
@@ -109,20 +106,15 @@ export function CommandPalette() {
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
                     if (inputRef.current) {
-                        console.log("🔵 [DEBUG] [CommandPalette] Attempting to focus input...");
+                        // console.log("🔵 [DEBUG] [CommandPalette] Attempting to focus input...");
                         inputRef.current.focus();
-                        console.log("🔵 [DEBUG] [CommandPalette] Input focused, document.activeElement:", document.activeElement);
-                    } else {
-                        console.log("🔴 [DEBUG] [CommandPalette] inputRef.current is null!");
                     }
                 });
             });
         };
 
         const handleWindowBlur = () => {
-            console.log("🔴 [DEBUG] [CommandPalette] ========== WINDOW BLUR EVENT ==========");
-            console.log("🔴 [DEBUG] [CommandPalette] Window lost focus");
-            console.log("🔴 [DEBUG] [CommandPalette] document.hasFocus():", document.hasFocus());
+            // console.log("🔴 [DEBUG] [CommandPalette] ========== WINDOW BLUR EVENT ==========");
         };
 
         // Reset on initial mount
@@ -144,7 +136,7 @@ export function CommandPalette() {
                 const result = await api.captureSelection("clipboard");
                 if (result.text) {
                     setCapturedText(result.text);
-                    console.log("[Capture] Captured text:", result.text);
+                    // console.log("[Capture] Captured text:", result.text);
                 }
             } catch (e) {
                 console.error("Failed to capture text:", e);
@@ -156,7 +148,7 @@ export function CommandPalette() {
 
         // Also capture when window gains focus (user opens palette)
         const handleFocus = () => {
-            console.log("[Focus] Window focused, re-capturing text");
+            // console.log("[Focus] Window focused, re-capturing text");
             captureText();
         };
 
@@ -167,32 +159,19 @@ export function CommandPalette() {
     // Ensure window is focused and input receives focus
     useEffect(() => {
         const ensureFocus = async () => {
-            console.log("🔵 [DEBUG] [CommandPalette] ========== ENSURE FOCUS EFFECT ==========");
-            console.log("🔵 [DEBUG] [CommandPalette] Initial state:");
-            console.log("🔵 [DEBUG] [CommandPalette]   - document.hasFocus():", document.hasFocus());
-            console.log("🔵 [DEBUG] [CommandPalette]   - document.activeElement:", document.activeElement);
-            console.log("🔵 [DEBUG] [CommandPalette]   - inputRef.current:", inputRef.current);
+            // console.log("🔵 [DEBUG] [CommandPalette] ========== ENSURE FOCUS EFFECT ==========");
 
             try {
                 const window = getCurrentWindow();
-                console.log("🔵 [DEBUG] [CommandPalette] Calling window.setFocus()...");
+                // console.log("🔵 [DEBUG] [CommandPalette] Calling window.setFocus()...");
                 await window.setFocus();
-                console.log("🔵 [DEBUG] [CommandPalette] ✓ window.setFocus() completed");
-
-                // Check state after setFocus
-                console.log("🔵 [DEBUG] [CommandPalette] State after setFocus():");
-                console.log("🔵 [DEBUG] [CommandPalette]   - document.hasFocus():", document.hasFocus());
 
                 // Wait for next frame to ensure DOM is ready
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => {
                         if (inputRef.current) {
-                            console.log("🔵 [DEBUG] [CommandPalette] Focusing input element...");
+                            // console.log("🔵 [DEBUG] [CommandPalette] Focusing input element...");
                             inputRef.current.focus();
-                            console.log("🔵 [DEBUG] [CommandPalette] Input focused, document.activeElement:", document.activeElement);
-                            console.log("🔵 [DEBUG] [CommandPalette] inputRef.current === document.activeElement:", inputRef.current === document.activeElement);
-                        } else {
-                            console.log("🔴 [DEBUG] [CommandPalette] inputRef.current is null!");
                         }
                     });
                 });
@@ -205,13 +184,11 @@ export function CommandPalette() {
 
         // Also focus on window focus event
         const handleWindowFocus = () => {
-            console.log("🔵 [DEBUG] [CommandPalette] Window focus event received");
-            console.log("🔵 [DEBUG] [CommandPalette] document.hasFocus():", document.hasFocus());
+            // console.log("🔵 [DEBUG] [CommandPalette] Window focus event received");
             requestAnimationFrame(() => {
                 if (inputRef.current) {
-                    console.log("🔵 [DEBUG] [CommandPalette] Focusing input on window focus event...");
+                    // console.log("🔵 [DEBUG] [CommandPalette] Focusing input on window focus event...");
                     inputRef.current.focus();
-                    console.log("🔵 [DEBUG] [CommandPalette] Input focused, document.activeElement:", document.activeElement);
                 }
             });
         };
@@ -501,17 +478,21 @@ export function CommandPalette() {
             // Removed setTimeout - popover stays open until user interacts or clicks outside
 
         } catch (e) {
-            const errObj = e as any;
-            const message =
-                errObj?.message ??
-                errObj?.error ??
-                (typeof errObj === "string" ? errObj : JSON.stringify(errObj));
+            let message = "Unknown error";
+            if (e instanceof Error) {
+                message = e.message;
+            } else if (typeof e === "string") {
+                message = e;
+            } else {
+                message = JSON.stringify(e);
+            }
 
             console.error("Action execution failed:", e);
 
             // Best-effort toast if a global toast implementation exists
             try {
-                const maybeToast = (window as any)?.toast;
+                // @ts-ignore - Assuming standard window toast extension for now
+                const maybeToast = window.toast;
                 if (maybeToast?.error) {
                     maybeToast.error(message);
                 }

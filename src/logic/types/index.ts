@@ -193,12 +193,12 @@ export interface CommandItem {
 
 export interface ExecuteActionRequest {
     action_type: ActionType;
-    params: Record<string, any>;
+    params: Record<string, unknown>;
 }
 
 export interface ExecuteActionResponse {
     result: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
 }
 
 
