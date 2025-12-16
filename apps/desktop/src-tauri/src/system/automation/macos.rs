@@ -31,6 +31,47 @@ pub fn check_accessibility_permissions() -> bool {
     unsafe { AXIsProcessTrusted() }
 }
 
+/// Ensure accessibility permissions are granted, prompting user if needed
+/// 
+/// This function will trigger the macOS system dialog if permissions are not granted.
+/// Returns true if permissions are already granted, false if they need to be granted.
+/// 
+/// IMPORTANT: If this returns false, the user MUST:
+/// 1. Grant permissions in System Settings > Privacy & Security > Accessibility
+/// 2. Restart the application
+pub fn ensure_accessibility_permissions() -> bool {
+    use core_foundation::base::{CFRelease, TCFType};
+    use core_foundation::boolean::CFBoolean;
+    use core_foundation::dictionary::CFDictionary;
+    use core_foundation::string::CFString;
+    
+    #[link(name = "ApplicationServices", kind = "framework")]
+    extern "C" {
+        fn AXIsProcessTrustedWithOptions(options: core_foundation::dictionary::CFDictionaryRef) -> bool;
+    }
+    
+    unsafe {
+        // Create the prompt option key
+        let key = CFString::from_static_string("AXTrustedCheckOptionPrompt");
+        let value = CFBoolean::true_value();
+        
+        // Create options dictionary with prompt enabled
+        let options = CFDictionary::from_CFType_pairs(&[(key.as_CFType(), value.as_CFType())]);
+        
+        // Check permissions with prompt
+        let is_trusted = AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef());
+        
+        if is_trusted {
+            println!("✅ Accessibility permissions granted");
+        } else {
+            println!("⚠️  Accessibility permissions NOT granted - system prompt shown");
+            println!("💡 User must grant permissions in System Settings and restart the app");
+        }
+        
+        is_trusted
+    }
+}
+
 /// Get the name of the currently active application
 /// Uses NSWorkspace via Cocoa/ObjC
 pub fn get_active_app() -> AppResult<String> {

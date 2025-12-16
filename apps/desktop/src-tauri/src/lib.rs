@@ -9,7 +9,7 @@ mod config;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconEvent},
-    Manager, WebviewUrl, WebviewWindowBuilder,
+    Manager, WebviewUrl, WebviewWindowBuilder, Emitter,
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
@@ -20,7 +20,48 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                     let urls = event.urls();
+                     println!("Deep Link URL: {:?}", urls);
+                     // urls is usually Vec<Url>
+                     
+                     for url in urls {
+                         if url.scheme() == "prodwidgets" {
+                             // 1. Parse Token
+                             if let Some(token_pair) = url.query_pairs().find(|(key, _)| key == "token") {
+                                 let token = token_pair.1.to_string();
+                                 println!("Deep Link Token Found: {}", token);
+                                 
+                                 // 2. Focus Window
+                                 let handle_clone = handle.clone();
+                                 let token_clone = token.clone();
+                                 
+                                 tauri::async_runtime::spawn(async move {
+                                     // Force app to front
+                                     if let Some(window) = handle_clone.get_webview_window("palette-window") {
+                                         system::window::nswindow::force_window_to_front(&window);
+                                         window.set_focus().ok();
+                                         
+                                          // 3. Emit Event
+                                         println!("Emitting auth-deep-link event...");
+                                         if let Err(e) = handle_clone.emit("auth-deep-link", token_clone) {
+                                             eprintln!("Failed to emit auth event: {}", e);
+                                         }
+                                     }
+                                 });
+                             }
+                         }
+                     }
+                });
+            }
+
             // CRITICAL: Set app activation policy to Accessory FIRST
             // This prevents space-switching when activating the app
             #[cfg(target_os = "macos")]
@@ -262,7 +303,8 @@ pub fn run() {
                                             // Just focus - no verification or retry (show_window_over_fullscreen handles retries internally)
                                             if let Some(window) = handle_clone.get_webview_window("palette-window") {
                                                 // Increased delay for full transition to complete
-                                                tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
+                                                // Optimized: Reduced from 400ms to 50ms - just enough for frame alignment
+                                                tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
                                                 
                                                 // Set focus (safe during transition)
                                                 if let Err(e) = window.set_focus() {
@@ -362,6 +404,7 @@ pub fn run() {
             // System commands
             api::commands::system::get_active_app,
             api::commands::system::check_accessibility_permissions,
+            api::commands::system::check_accessibility_permission,
             api::commands::system::log_message,
             // Settings commands
             api::commands::settings::get_settings,
@@ -415,8 +458,8 @@ async fn show_widget_window_async(
     
     // Get window configuration from registry (no hardcoded tuples)
     let config = config::get_window_config(widget);
-    let width = config.width as u32;
-    let height = config.height as u32;
+    let _width = config.width as u32;
+    let _height = config.height as u32;
     let _title = config.title;
     let _transparent = config.transparent;
     let _decorations = config.decorations;
@@ -427,6 +470,12 @@ async fn show_widget_window_async(
         
         // IDEMPOTENT OPERATION: Simply show and focus - no re-initialization
         // Window is already configured from initial creation, so we just toggle visibility
+        
+        // CRITICAL: Explicitly show the window first (it might be hidden from previous close)
+        window.show().map_err(|e| format!("Failed to show window: {}", e))?;
+        
+        // DEBUG: Force DevTools to open so we can see Console Errors
+        // window.open_devtools();
         
         // FIX: Use force_window_to_front instead of standard show/focus
         // This ensures the app activates even in Accessory mode
@@ -693,8 +742,11 @@ async fn show_widget_window_create_new_async(app: &tauri::AppHandle, widget: &st
                 window.show().ok();
             }
             
-            // Increased delay for full transition to complete
-            tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
+        // DEBUG: Force DevTools to open so we can see Console Errors
+        // window.open_devtools();
+            
+            // Optimized: Reduced from 400ms to 50ms
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
             
             // CRITICAL FIX: Force window to front after creation/configuration
             // This ensures the window is actually key and active, preventing "Double Press" bug

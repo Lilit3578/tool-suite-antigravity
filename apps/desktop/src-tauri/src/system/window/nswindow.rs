@@ -909,7 +909,14 @@ pub fn force_window_to_front(window: &tauri::WebviewWindow) {
             let _: () = msg_send![ns_app, activateIgnoringOtherApps: YES];
             
             // 2. Get Window Handle
-            let ns_window: id = window_clone.ns_window().unwrap() as id;
+            let ns_window_ptr = match window_clone.ns_window() {
+                Ok(ptr) => ptr,
+                Err(e) => {
+                    eprintln!("🔴 [DEBUG] [ForceActivation] Failed to get NSWindow: {}", e);
+                    return;
+                }
+            };
+            let ns_window: id = ns_window_ptr as id;
             
             // 3. Make Key and Order Front
             let _: () = msg_send![ns_window, makeKeyAndOrderFront: nil];
@@ -924,8 +931,12 @@ pub fn force_window_to_front(window: &tauri::WebviewWindow) {
 
 #[cfg(not(target_os = "macos"))]
 pub fn force_window_to_front(window: &tauri::WebviewWindow) {
-    window.show().unwrap();
-    window.set_focus().unwrap();
+    if let Err(e) = window.show() {
+        eprintln!("Failed to show window: {}", e);
+    }
+    if let Err(e) = window.set_focus() {
+        eprintln!("Failed to focus window: {}", e);
+    }
 }
 
 #[cfg(test)]

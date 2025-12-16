@@ -5,6 +5,9 @@ import authConfig from "@/auth.config"
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
     adapter: MongoDBAdapter(clientPromise),
-    session: { strategy: "database" },
+    session: {
+        strategy: "jwt",
+        maxAge: 180 * 24 * 60 * 60, // 180 days
+    },
     ...authConfig,
 })

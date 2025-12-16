@@ -338,7 +338,10 @@ export function CommandPalette() {
             setPopoverOpen(false);
             setSelectedActionId(null);
         }
-    }, [query]); // Runs whenever query changes
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [query]); // ← FIXED: Only run when query changes (ignore popoverOpen to prevent immediate close loop)
+
+
 
     // Trigger A: Close popover when user scrolls the command list
     useEffect(() => {
@@ -549,7 +552,8 @@ export function CommandPalette() {
                 width: '550px',
                 height: '328px',
                 background: 'transparent',
-                position: 'relative'
+                position: 'relative',
+                pointerEvents: 'auto' // Explicitly enable clicks (overriding parent's none)
             }}
         >
             {/* Command Palette - let shadcn handle all styling */}

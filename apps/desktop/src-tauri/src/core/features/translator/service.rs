@@ -170,7 +170,7 @@ impl TranslatorService {
             .form(&[
                 ("auth_key", api_key),
                 ("text", req.text.clone()),
-                ("target_lang", req.target_lang.to_639_1().unwrap().to_string()),
+                // ("target_lang", req.target_lang.to_639_1().unwrap_or_default().to_string()),
             ])
             .send()
             .await

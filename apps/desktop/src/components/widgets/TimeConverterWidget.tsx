@@ -9,21 +9,20 @@ import { useDebounce } from "../../hooks/useDebounce";
 
 export function TimeConverterWidget() {
     // Global State
-    const {
-        timeFromInput,
-        setTimeFromInput,
-        timeToInput,
-        setTimeToInput,
-        timeSourceTimezone,
-        setTimeSourceTimezone,
-        timeTargetTimezone,
-        setTimeTargetTimezone,
-        timeRelativeOffset,
-        setTimeRelativeOffset,
-        timeDateChangeIndicator,
-        setTimeDateChangeIndicator,
-        resetTimeConverter,
-    } = useAppStore();
+    // Use granular selectors to prevent re-renders
+    const timeFromInput = useAppStore(state => state.timeFromInput);
+    const setTimeFromInput = useAppStore(state => state.setTimeFromInput);
+    const timeToInput = useAppStore(state => state.timeToInput);
+    const setTimeToInput = useAppStore(state => state.setTimeToInput);
+    const timeSourceTimezone = useAppStore(state => state.timeSourceTimezone);
+    const setTimeSourceTimezone = useAppStore(state => state.setTimeSourceTimezone);
+    const timeTargetTimezone = useAppStore(state => state.timeTargetTimezone);
+    const setTimeTargetTimezone = useAppStore(state => state.setTimeTargetTimezone);
+    const timeRelativeOffset = useAppStore(state => state.timeRelativeOffset);
+    const setTimeRelativeOffset = useAppStore(state => state.setTimeRelativeOffset);
+    const timeDateChangeIndicator = useAppStore(state => state.timeDateChangeIndicator);
+    const setTimeDateChangeIndicator = useAppStore(state => state.setTimeDateChangeIndicator);
+    const resetTimeConverter = useAppStore(state => state.resetTimeConverter);
 
     // Local State
     const [timezones, setTimezones] = useState<TimezoneInfo[]>([]);

@@ -8,6 +8,7 @@ const DeviceSchema = new Schema({
 
 const UserSchema = new Schema({
     email: { type: String, required: true, unique: true, index: true },
+    name: { type: String },
     plan: { type: String, enum: ['free', 'paid'], default: 'free' },
     stripeCustomerId: { type: String, unique: true, sparse: true },
     devices: {

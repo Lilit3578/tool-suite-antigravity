@@ -131,6 +131,14 @@ export const api = {
     },
 
     /**
+     * Ensure accessibility permissions are granted, prompting user if needed
+     * This will trigger the macOS system dialog if permissions are not granted
+     */
+    async checkAccessibilityPermission(): Promise<boolean> {
+        return invoke<boolean>("check_accessibility_permission");
+    },
+
+    /**
      * Record command usage for intelligent ranking
      */
     async recordCommandUsage(commandId: string): Promise<void> {

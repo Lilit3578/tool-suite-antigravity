@@ -6,7 +6,8 @@ import type { AppSettings } from "../../logic/types";
 
 
 export function SettingsWidget() {
-    const { settings, setSettings } = useAppStore();
+    const settings = useAppStore((state) => state.settings);
+    const setSettings = useAppStore((state) => state.setSettings);
     const [localSettings, setLocalSettings] = useState<AppSettings | null>(null);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);

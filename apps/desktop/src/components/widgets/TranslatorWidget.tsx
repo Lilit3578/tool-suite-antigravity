@@ -99,11 +99,15 @@ export function TranslatorWidget() {
             .then((response) => {
                 if (currentRequest !== requestIdRef.current) return;
                 if (response.detected) {
-                    const detectedOption = LANGUAGES.find(
-                        (lang) => lang.code.toLowerCase() === response.detected?.toLowerCase()
-                    );
-                    if (detectedOption) {
-                        setSourceLang(detectedOption);
+                    // Only update source language if currently set to Auto (null)
+                    // This prevents "fighting" the user if they explicitly selected a language
+                    if (sourceLang === null) {
+                        const detectedOption = LANGUAGES.find(
+                            (lang) => lang.code.toLowerCase() === response.detected?.toLowerCase()
+                        );
+                        if (detectedOption) {
+                            setSourceLang(detectedOption);
+                        }
                     }
                 }
                 setTranslated(response.translated || "");
