@@ -4,6 +4,7 @@ mod api;
 mod core;
 mod system;
 mod config;
+mod commands;
 // mod features;  <-- REMOVED
 
 use tauri::{
@@ -16,6 +17,9 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            let _ = app.emit("deep-link://new-url", args);
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -34,24 +38,35 @@ pub fn run() {
                      
                      for url in urls {
                          if url.scheme() == "prodwidgets" {
-                             // 1. Parse Token
+                             // 1. Parse Token (Legacy/Direct Token)
                              if let Some(token_pair) = url.query_pairs().find(|(key, _)| key == "token") {
                                  let token = token_pair.1.to_string();
                                  println!("Deep Link Token Found: {}", token);
-                                 
-                                 // 2. Focus Window
+                                 // ... existing token logic ...
                                  let handle_clone = handle.clone();
-                                 let token_clone = token.clone();
-                                 
                                  tauri::async_runtime::spawn(async move {
-                                     // Force app to front
+                                     if let Some(window) = handle_clone.get_webview_window("palette-window") {
+                                         system::window::nswindow::force_window_to_front(&window);
+                                         window.set_focus().ok();
+                                         let _ = handle_clone.emit("auth-deep-link", token);
+                                     }
+                                 });
+                             }
+                             
+                             // 2. Parse OTP (Handshake Flow)
+                             if let Some(otp_pair) = url.query_pairs().find(|(key, _)| key == "otp") {
+                                 let otp = otp_pair.1.to_string();
+                                 println!("Deep Link OTP Found: {}", otp);
+                                 
+                                 let handle_clone = handle.clone();
+                                 tauri::async_runtime::spawn(async move {
+                                     // Ensure app is visible/front
                                      if let Some(window) = handle_clone.get_webview_window("palette-window") {
                                          system::window::nswindow::force_window_to_front(&window);
                                          window.set_focus().ok();
                                          
-                                          // 3. Emit Event
-                                         println!("Emitting auth-deep-link event...");
-                                         if let Err(e) = handle_clone.emit("auth-deep-link", token_clone) {
+                                         println!("Emitting auth-otp-received event...");
+                                         if let Err(e) = handle_clone.emit("auth-otp-received", otp) {
                                              eprintln!("Failed to emit auth event: {}", e);
                                          }
                                      }
@@ -409,6 +424,8 @@ pub fn run() {
             // Settings commands
             api::commands::settings::get_settings,
             api::commands::settings::save_settings,
+            // Auth commands
+            commands::auth::perform_handshake,
             // Feature commands
             // Feature commands
             core::features::translator::translate_text,

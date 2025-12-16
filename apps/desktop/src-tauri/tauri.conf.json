@@ -8,6 +8,13 @@
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
+  "plugins": {
+    "deep-link": {
+      "schemes": [
+        "prodwidgets"
+      ]
+    }
+  },
   "app": {
     "windows": [],
     "security": {
@@ -24,7 +31,6 @@
       "id": "main-tray",
       "iconPath": "icons/icon.png",
       "iconAsTemplate": true,
-      "menuOnLeftClick": false,
       "title": "Productivity Widgets"
     }
   },

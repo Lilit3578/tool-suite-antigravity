@@ -9,6 +9,7 @@ import { UnitConverterWidget } from "./components/widgets/UnitConverterWidget";
 import { TimeConverterWidget } from "./components/widgets/TimeConverterWidget";
 import { DefinitionWidget } from "./components/widgets/DefinitionWidget";
 import { useDeepLinkListener } from "./logic/hooks/useDeepLink";
+import { useDeepLinkAuth } from "./logic/hooks/useDeepLinkAuth";
 import { TextAnalyserWidget } from "./components/widgets/TextAnalyserWidget";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -21,6 +22,7 @@ function App() {
 
   // Hook: Deep links
   useDeepLinkListener();
+  useDeepLinkAuth();
 
   // Hook: Init Logic (Widget Type & Settings)
   useEffect(() => {
