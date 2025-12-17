@@ -82,9 +82,16 @@ const CommandList = React.forwardRef<
   return (
     <CommandPrimitive.List
       ref={(node) => {
-        listRef.current = node;
-        if (typeof ref === "function") ref(node);
-        else if (ref) ref.current = node;
+        // Update local ref
+        if (listRef.current !== node) {
+          (listRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+        }
+        // Forward ref to parent
+        if (typeof ref === "function") {
+          ref(node);
+        } else if (ref) {
+          (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+        }
       }}
       className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden", className)}
       {...props}

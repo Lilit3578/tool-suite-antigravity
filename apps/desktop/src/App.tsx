@@ -183,14 +183,16 @@ function App() {
     case "palette":
     default:
       return (
-        <div style={{
-          background: 'transparent',
-          width: '100vw',
-          height: '100vh',
-          pointerEvents: 'none' // CRITICAL: Lets clicks pass through to app below
-        }}>
-          <CommandPalette />
-        </div>
+        <>
+          <div style={{
+            background: 'transparent',
+            width: '100vw',
+            height: '100vh',
+            pointerEvents: 'none' // CRITICAL: Lets clicks pass through to app below
+          }}>
+            <CommandPalette />
+          </div>
+        </>
       );
   }
 }

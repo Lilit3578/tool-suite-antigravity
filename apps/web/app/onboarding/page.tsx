@@ -25,7 +25,7 @@ export default async function OnboardingPage() {
                     Welcome!
                 </h2>
                 <p className="mt-2 text-center text-sm text-gray-600">
-                    Let's verify your details.
+                    Let&apos;s verify your details.
                 </p>
             </div>
 

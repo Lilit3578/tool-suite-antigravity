@@ -44,12 +44,25 @@ const AuthHandshakeSchema = new Schema({
 // We'll set the TTL on expiresAt to 0, so it deletes exactly when it expires.
 AuthHandshakeSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
+// PKCE Authentication Request Schema
+const AuthRequestSchema = new Schema({
+    authCode: { type: String, required: true, unique: true, index: true },
+    challenge: { type: String, required: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    expiresAt: { type: Date, required: true }
+});
+
+// TTL Index: Auto-delete when expiresAt is reached (5 minute TTL)
+AuthRequestSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
 // Export Models
 export const User = models.User || model('User', UserSchema);
 export const UsageLog = models.UsageLog || model('UsageLog', UsageLogSchema);
 export const AuthHandshake = models.AuthHandshake || model('AuthHandshake', AuthHandshakeSchema);
+export const AuthRequest = models.AuthRequest || model('AuthRequest', AuthRequestSchema);
 
 // Export Inferred Types
 export type UserType = InferSchemaType<typeof UserSchema>;
 export type UsageLogType = InferSchemaType<typeof UsageLogSchema>;
 export type AuthHandshakeType = InferSchemaType<typeof AuthHandshakeSchema>;
+export type AuthRequestType = InferSchemaType<typeof AuthRequestSchema>;

@@ -21,7 +21,7 @@ export default async function DashboardPage() {
     }
 
     // SERIALIZATION: Convert MongoDB specific types to primitives for client components
-    const devices = (user.devices || []).map((device: any) => ({
+    const devices = (user.devices || []).map((device: { _id: { toString: () => string }; name: string; fingerprint: string; lastSeen?: Date }) => ({
         _id: device._id.toString(),
         name: device.name,
         fingerprint: device.fingerprint,

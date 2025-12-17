@@ -5,7 +5,7 @@ import dbConnect from '@/lib/db/connect';
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 
-export async function POST(req: Request) {
+export async function POST() {
     try {
         const session = await auth();
         console.log('[Generate OTP] Session:', JSON.stringify(session, null, 2));
@@ -56,8 +56,8 @@ export async function POST(req: Request) {
 
         return NextResponse.json({ otp, expiresAt });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[Generate OTP] CRITICAL ERROR:', error);
-        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+        return NextResponse.json({ error: error instanceof Error ? error.message : 'Internal Server Error' }, { status: 500 });
     }
 }

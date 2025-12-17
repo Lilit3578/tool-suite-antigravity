@@ -38,11 +38,11 @@ pub fn run() {
                      
                      for url in urls {
                          if url.scheme() == "prodwidgets" {
-                             // 1. Parse Token (Legacy/Direct Token)
+                             // 1. Parse Token (Legacy/Direct Token - DEPRECATED)
                              if let Some(token_pair) = url.query_pairs().find(|(key, _)| key == "token") {
                                  let token = token_pair.1.to_string();
-                                 println!("Deep Link Token Found: {}", token);
-                                 // ... existing token logic ...
+                                 println!("⚠️  Deep Link Token Found (DEPRECATED): {}", token);
+                                 // ... existing token logic ..
                                  let handle_clone = handle.clone();
                                  tauri::async_runtime::spawn(async move {
                                      if let Some(window) = handle_clone.get_webview_window("palette-window") {
@@ -53,10 +53,30 @@ pub fn run() {
                                  });
                              }
                              
-                             // 2. Parse OTP (Handshake Flow)
+                             // 2. Parse Code (PKCE Flow - SECURE)
+                             if let Some(code_pair) = url.query_pairs().find(|(key, _)| key == "code") {
+                                 let code = code_pair.1.to_string();
+                                 println!("✅ Deep Link Auth Code Found (PKCE): {}", code);
+                                 
+                                 let handle_clone = handle.clone();
+                                 tauri::async_runtime::spawn(async move {
+                                     // Ensure app is visible/front
+                                     if let Some(window) = handle_clone.get_webview_window("palette-window") {
+                                         system::window::nswindow::force_window_to_front(&window);
+                                         window.set_focus().ok();
+                                         
+                                         println!("Emitting auth-code-received event...");
+                                         if let Err(e) = handle_clone.emit("auth-code-received", code) {
+                                             eprintln!("Failed to emit auth-code event: {}", e);
+                                         }
+                                     }
+                                 });
+                             }
+                             
+                             // 3. Parse OTP (Handshake Flow - DEPRECATED)
                              if let Some(otp_pair) = url.query_pairs().find(|(key, _)| key == "otp") {
                                  let otp = otp_pair.1.to_string();
-                                 println!("Deep Link OTP Found: {}", otp);
+                                 println!("⚠️  Deep Link OTP Found (DEPRECATED): {}", otp);
                                  
                                  let handle_clone = handle.clone();
                                  tauri::async_runtime::spawn(async move {
@@ -103,6 +123,9 @@ pub fn run() {
             let clipboard_history = core::clipboard::history::ClipboardHistory::new();
             let clipboard_monitor = core::clipboard::monitor::ClipboardMonitor::new(clipboard_history.clone_arc());
             
+            // Initialize PKCE state for secure authentication
+            let pkce_state = core::auth::pkce::PkceState::new();
+            
             // Initialize usage metrics for intelligent ranking
             let usage_metrics = core::context::UsageMetrics::new();
             
@@ -120,6 +143,7 @@ pub fn run() {
             
             // Store in app state for access from commands
             // CRITICAL: Must manage ALL state BEFORE accessing it in closures
+            app.manage(pkce_state);
             app.manage(clipboard_history);
             app.manage(clipboard_monitor.clone_arc());
             app.manage(usage_metrics);
@@ -425,7 +449,9 @@ pub fn run() {
             api::commands::settings::get_settings,
             api::commands::settings::save_settings,
             // Auth commands
-            commands::auth::perform_handshake,
+            commands::auth::initiate_login,
+            commands::auth::exchange_token,
+            commands::auth::perform_handshake,  // Deprecated but kept for compatibility
             // Feature commands
             // Feature commands
             core::features::translator::translate_text,

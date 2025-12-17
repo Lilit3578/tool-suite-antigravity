@@ -44,7 +44,7 @@ export async function POST(req: Request) {
         }
 
         // Simple check: is this hardware_id already in devices?
-        const existingDevice = user.devices.find((d: any) => d.fingerprint === hardware_id);
+        const existingDevice = user.devices.find((d: { fingerprint: string }) => d.fingerprint === hardware_id);
 
         if (!existingDevice) {
             if (user.devices.length >= 3) {
