@@ -1,4 +1,4 @@
-import type { CommandItem } from "../types";
+import type { CommandItemExtended as CommandItem } from "../types";
 
 export interface TextContext {
     isCurrency: boolean;    // e.g. "$100", "100 usd", "50 eur"

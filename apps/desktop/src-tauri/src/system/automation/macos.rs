@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicU32, AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use cocoa::base::{id, nil};
@@ -10,7 +10,12 @@ use objc::runtime::Class;
 use std::ffi::CStr;
 use core_graphics::event::{CGEvent, CGEventTapLocation, CGEventFlags, CGKeyCode};
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+use once_cell::sync::Lazy;
 use crate::shared::error::{AppError, AppResult};
+
+/// Global mutex for clipboard operations to prevent race conditions
+/// Ensures thread-safe backup/restore during text capture
+static CLIPBOARD_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 /// Circuit breaker for paste operations
 /// Tracks consecutive failures to prevent infinite retry loops
@@ -270,6 +275,19 @@ const CLIPBOARD_POLL_INTERVAL_MS: u64 = 50;
 /// 
 /// IMPORTANT: Always writes captured text to clipboard so frontend can read it
 pub fn capture_selection(ignore_flag: Option<Arc<AtomicBool>>) -> AppResult<Option<String>> {
+    // Acquire mutex lock to prevent race conditions
+    let _guard = CLIPBOARD_LOCK.lock().unwrap();
+    println!("[CaptureSelection] 🔒 Clipboard lock acquired");
+    
+    // Backup current clipboard before any operations
+    let backup = read_clipboard_text()?;
+    if let Some(ref text) = backup {
+        println!("[CaptureSelection] 💾 Backed up clipboard ({} bytes)", text.len());
+    }
+    
+    // Clone backup for use in panic handler (closure will move the original)
+    let backup_for_panic = backup.clone();
+    
     // Use catch_unwind to prevent panics from crashing the app
     let result = std::panic::catch_unwind(|| {
         if !check_accessibility_permissions() {
@@ -282,15 +300,13 @@ pub fn capture_selection(ignore_flag: Option<Arc<AtomicBool>>) -> AppResult<Opti
             Ok(Some(text)) => {
                 println!("[CaptureSelection] ✅ Success via AX API (recursive search)");
                 
-                // CRITICAL FIX: Write to clipboard so frontend can read it
-                // Set ignore flag because we are manually writing to clipboard
-                if let Some(flag) = &ignore_flag {
-                    flag.store(true, Ordering::SeqCst);
-                    println!("[CaptureSelection] 🚩 Ignore flag set for manual write");
-                }
-                
-                if let Err(e) = write_text_to_clipboard(&text) {
-                    eprintln!("[CaptureSelection] ⚠️ Failed to write to clipboard: {:?}", e);
+                // Restore backup immediately (AX API doesn't use clipboard)
+                if let Some(backup_text) = backup {
+                    if let Err(e) = write_text_to_clipboard(&backup_text) {
+                        eprintln!("[CaptureSelection] ⚠️ Failed to restore clipboard: {:?}", e);
+                    } else {
+                        println!("[CaptureSelection] ♻️ Clipboard restored");
+                    }
                 }
                 
                 return Ok(Some(text));
@@ -303,29 +319,59 @@ pub fn capture_selection(ignore_flag: Option<Arc<AtomicBool>>) -> AppResult<Opti
             }
         }
 
-        // Step 2: Fallback: Transactional "Ghost" Copy
+        // Step 2: Fallback: Transactional "Ghost" Copy with backup
         println!("[CaptureSelection] ⚠️  Falling back to simulated copy...");
-        match capture_via_simulated_copy(ignore_flag) {
+        match capture_via_simulated_copy(ignore_flag, backup.clone()) {
             Ok(Some(text)) => {
                 println!("[CaptureSelection] ✅ Success via fallback (simulated copy)");
-                // Clipboard is already updated by simulated copy
                 Ok(Some(text))
             }
             Ok(None) => {
                 println!("[CaptureSelection] ❌ No text captured via fallback");
+                
+                // Restore backup even on failure
+                if let Some(backup_text) = backup {
+                    if let Err(e) = write_text_to_clipboard(&backup_text) {
+                        eprintln!("[CaptureSelection] ⚠️ Failed to restore clipboard: {:?}", e);
+                    } else {
+                        println!("[CaptureSelection] ♻️ Clipboard restored (no capture)");
+                    }
+                }
+                
                 Ok(None)
             }
             Err(e) => {
                 println!("[CaptureSelection] ❌ Fallback error: {:?}", e);
+                
+                // Restore backup on error
+                if let Some(backup_text) = backup {
+                    if let Err(e) = write_text_to_clipboard(&backup_text) {
+                        eprintln!("[CaptureSelection] ⚠️ Failed to restore clipboard: {:?}", e);
+                    } else {
+                        println!("[CaptureSelection] ♻️ Clipboard restored (error recovery)");
+                    }
+                }
+                
                 Err(e)
             }
         }
     });
 
     match result {
-        Ok(res) => res,
+        Ok(res) => {
+            println!("[CaptureSelection] 🔓 Clipboard lock released");
+            res
+        },
         Err(_) => {
             eprintln!("[CaptureSelection] ❌ PANIC caught in capture_selection!");
+            
+            // Attempt to restore backup even after panic
+            if let Some(backup_text) = backup_for_panic {
+                if let Err(e) = write_text_to_clipboard(&backup_text) {
+                    eprintln!("[CaptureSelection] ⚠️ Failed to restore clipboard after panic: {:?}", e);
+                }
+            }
+            
             Err(AppError::Io("Internal error: panic in capture_selection".to_string()))
         }
     }
@@ -358,6 +404,45 @@ fn write_text_to_clipboard(text: &str) -> AppResult<()> {
         
         println!("[WriteClipboard] ✅ Wrote {} bytes to clipboard", text.len());
         Ok(())
+    }
+}
+
+/// Helper function to read current clipboard text content
+/// Returns None if clipboard is empty or contains non-text data
+fn read_clipboard_text() -> AppResult<Option<String>> {
+    unsafe {
+        let pb: id = msg_send![class!(NSPasteboard), generalPasteboard];
+        if pb == nil {
+            return Err(AppError::Io("Failed to get NSPasteboard".to_string()));
+        }
+        
+        // Get NSString class for reading text
+        let ns_string_class = class!(NSString);
+        let classes: id = msg_send![class!(NSArray), arrayWithObject:ns_string_class as *const _ as id];
+        if classes == nil {
+            return Ok(None);
+        }
+        
+        // Read clipboard objects
+        let strings: id = msg_send![pb, readObjectsForClasses:classes options:nil];
+        if strings == nil {
+            return Ok(None);
+        }
+        
+        // Extract first string if available
+        let count: NSUInteger = msg_send![strings, count];
+        if count > 0 {
+            let ns_str: id = msg_send![strings, objectAtIndex:0];
+            if ns_str != nil {
+                let utf8_ptr = NSString::UTF8String(ns_str);
+                if utf8_ptr != std::ptr::null() {
+                    let text = CStr::from_ptr(utf8_ptr).to_string_lossy().into_owned();
+                    return Ok(Some(text));
+                }
+            }
+        }
+        
+        Ok(None)
     }
 }
 
@@ -577,7 +662,11 @@ fn find_selection_in_element(element: id, depth: u8) -> AppResult<Option<String>
 /// 
 /// Memory-safe implementation wrapped in autoreleasepool to prevent leaks/crashes
 /// Uses correct NSString class reference to avoid nil pointer crashes
-fn capture_via_simulated_copy(ignore_flag: Option<Arc<AtomicBool>>) -> AppResult<Option<String>> {
+/// Restores the provided backup clipboard content after capturing
+fn capture_via_simulated_copy(
+    ignore_flag: Option<Arc<AtomicBool>>,
+    backup: Option<String>
+) -> AppResult<Option<String>> {
     // Wrap EVERYTHING in an autoreleasepool to prevent leaks/crashes
     autoreleasepool(|| {
         unsafe {
@@ -658,6 +747,8 @@ fn capture_via_simulated_copy(ignore_flag: Option<Arc<AtomicBool>>) -> AppResult
             println!("[CaptureViaCopy] Polling for clipboard change...");
 
             // Step 3: Polling Loop
+            let mut captured_text: Option<String> = None;
+            
             for attempt in 1..=MAX_CLIPBOARD_POLL_ATTEMPTS {
                 thread::sleep(Duration::from_millis(CLIPBOARD_POLL_INTERVAL_MS));
 
@@ -680,13 +771,13 @@ fn capture_via_simulated_copy(ignore_flag: Option<Arc<AtomicBool>>) -> AppResult
                     let classes: id = msg_send![class!(NSArray), arrayWithObject:ns_string_class as *const _ as id];
                     if classes == nil {
                         eprintln!("[CaptureViaCopy] ⚠️ Failed to create NSArray");
-                        return Ok(None);
+                        break;
                     }
 
                     let strings: id = msg_send![pb, readObjectsForClasses:classes options:nil];
                     if strings == nil {
                         eprintln!("[CaptureViaCopy] ⚠️ Failed to read clipboard objects");
-                        return Ok(None);
+                        break;
                     }
 
                     let count: NSUInteger = msg_send![strings, count];
@@ -696,23 +787,23 @@ fn capture_via_simulated_copy(ignore_flag: Option<Arc<AtomicBool>>) -> AppResult
                         // Safety Checks
                         if ns_str == nil {
                             println!("[CaptureViaCopy] ⚠️ Initial object is nil");
-                            return Ok(None);
+                            break;
                         }
 
                         let utf8_ptr = NSString::UTF8String(ns_str);
                         if utf8_ptr == std::ptr::null() {
                             println!("[CaptureViaCopy] ⚠️ UTF8String returned NULL");
-                            return Ok(None);
+                            break;
                         }
 
                         let rust_str = CStr::from_ptr(utf8_ptr).to_string_lossy().into_owned();
                         
                         if !rust_str.trim().is_empty() {
                             println!("[CaptureViaCopy] Captured text (length: {})", rust_str.len());
-                            return Ok(Some(rust_str));
+                            captured_text = Some(rust_str);
                         }
                     }
-                    return Ok(None);
+                    break;
                 }
 
                 if attempt == MAX_CLIPBOARD_POLL_ATTEMPTS {
@@ -720,7 +811,16 @@ fn capture_via_simulated_copy(ignore_flag: Option<Arc<AtomicBool>>) -> AppResult
                 }
             }
 
-            Ok(None)
+            // Step 4: Restore backup clipboard
+            if let Some(backup_text) = backup {
+                if let Err(e) = write_text_to_clipboard(&backup_text) {
+                    eprintln!("[CaptureViaCopy] ⚠️ Failed to restore clipboard: {:?}", e);
+                } else {
+                    println!("[CaptureViaCopy] ♻️ Clipboard restored");
+                }
+            }
+
+            Ok(captured_text)
         }
     })
 }

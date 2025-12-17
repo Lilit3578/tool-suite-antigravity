@@ -121,6 +121,7 @@ export function UnitConverterWidget() {
                     amount: numAmount,
                     from_unit: fromUnitId,
                     to_unit: toUnitId,
+                    material: null,
                 });
                 // console.log("[UnitConverter] Conversion result:", response.formatted_result);
                 setResult(response.formatted_result);

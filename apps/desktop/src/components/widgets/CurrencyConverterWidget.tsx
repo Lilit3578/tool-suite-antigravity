@@ -158,6 +158,7 @@ export function CurrencyConverterWidget() {
                 amount: String(amt),
                 from,
                 to,
+                date: null,
             });
 
             const parsedResult = parseFloat(response.result);

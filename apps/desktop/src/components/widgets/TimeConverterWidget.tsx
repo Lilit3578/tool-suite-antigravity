@@ -136,9 +136,9 @@ export function TimeConverterWidget() {
             try {
                 const response = await api.convertTime({
                     time_input: debouncedFrom,
-                    source_timezone: timeSourceTimezone,
+                    source_timezone: timeSourceTimezone || null,
                     target_timezone: timeTargetTimezone,
-                    matched_keyword: matchedKeyword
+                    matched_keyword: null
                 });
 
                 setTimeToInput(response.target_time);
@@ -176,7 +176,7 @@ export function TimeConverterWidget() {
                     time_input: debouncedTo, // We are treating TO input as the time to convert
                     source_timezone: timeTargetTimezone, // Swap source/target for reverse calc
                     target_timezone: timeSourceTimezone,
-                    matched_keyword: undefined // Keyword usually applies to source, clear or handle appropriately
+                    matched_keyword: null // Keyword usually applies to source, clear or handle appropriately
                 });
 
                 setTimeFromInput(response.target_time); // result is the "target" of the reverse conversion

@@ -1,15 +1,48 @@
+// ============================================================================
+// HYBRID TYPE IMPORT STRATEGY
+// ============================================================================
+// This file serves as the single source of truth for all TypeScript types.
+// 
+// SECTION 1: Auto-Generated Types (from Rust via ts-rs)
+// - Imported from ../../types/bindings.ts
+// - DO NOT manually edit these types
+// - They are automatically synchronized with Rust definitions
+//
+// SECTION 2: Frontend-Only Types
+// - Defined manually in this file
+// - These types have no Rust equivalent
+// ============================================================================
 
+// ============================================================================
+// SECTION 1: Auto-Generated Rust Types
+// ============================================================================
+// Re-export all auto-generated types from bindings
+export * from '../../types/bindings';
 
+// ============================================================================
+// SECTION 2: Frontend-Only Types
+// ============================================================================
+
+/**
+ * Application settings structure (frontend-only)
+ * Stored in ~/.config/productivity-widgets/settings.json
+ */
 export interface AppSettings {
     hotkeys: HotkeySettings;
     api_keys: ApiKeys;
     preferences: UserPreferences;
 }
 
+/**
+ * Hotkey configuration (frontend-only)
+ */
 export interface HotkeySettings {
     command_palette: string;
 }
 
+/**
+ * API keys for external services (frontend-only)
+ */
 export interface ApiKeys {
     translation_provider: string;
     translation_key: string;
@@ -17,6 +50,9 @@ export interface ApiKeys {
     currency_api_key: string;
 }
 
+/**
+ * User preferences (frontend-only)
+ */
 export interface UserPreferences {
     default_source_lang: string;
     default_target_lang: string;
@@ -25,191 +61,69 @@ export interface UserPreferences {
     theme: string;
 }
 
-export interface CaptureResult {
-    text: string;
-    source: string;
-}
+// ============================================================================
+// SECTION 3: Compatibility Layer for Auto-Generated Types
+// ============================================================================
+// These types make the auto-generated Rust types easier to use in frontend code
+// by making certain fields truly optional (undefined) instead of requiring null
 
-export interface TranslateRequest {
-    text: string;
-    source_lang?: string | null;
-    target_lang: string;
-    provider?: string | null;
-}
+/**
+ * Frontend-friendly version of ConvertCurrencyRequest
+ * Makes 'date' field optional (undefined instead of null)
+ */
+export type ConvertCurrencyRequestInput = Omit<import('../../types/bindings').ConvertCurrencyRequest, 'date'> & {
+    date?: string;
+};
 
-export interface TranslateResponse {
-    translated: string;
+/**
+ * Frontend-friendly version of TranslateRequest
+ * Makes 'provider' and 'source_lang' fields optional (undefined instead of null)
+ */
+export type TranslateRequestInput = Omit<import('../../types/bindings').TranslateRequest, 'provider' | 'source_lang'> & {
+    provider?: string;
+    source_lang?: string;
+};
+
+/**
+ * Frontend-friendly version of ConvertUnitsRequest
+ * Makes 'material' field optional (undefined instead of null)
+ */
+export type ConvertUnitsRequestInput = Omit<import('../../types/bindings').ConvertUnitsRequest, 'material'> & {
+    material?: string;
+};
+
+/**
+ * Frontend-friendly version of ConvertTimeRequest
+ * Makes 'source_timezone' and 'matched_keyword' fields optional (undefined instead of null)
+ */
+export type ConvertTimeRequestInput = Omit<import('../../types/bindings').ConvertTimeRequest, 'source_timezone' | 'matched_keyword'> & {
+    source_timezone?: string;
+    matched_keyword?: string;
+};
+
+/**
+ * Extended TranslateResponse with frontend-specific fields
+ * Adds 'detected' and 'cached' fields for frontend caching logic
+ */
+export type TranslateResponseExtended = import('../../types/bindings').TranslateResponse & {
     detected?: string;
     cached?: boolean;
-}
+};
 
-export interface ConvertCurrencyRequest {
-    amount: string;
-    from: string;
-    to: string;
-    date?: string;
-}
+/**
+ * Extended CommandItem with frontend-specific fields
+ * Adds 'keywords' field for search matching
+ */
+export type CommandItemExtended = import('../../types/bindings').CommandItem & {
+    keywords?: string[];
+};
 
-export interface ConvertCurrencyResponse {
-    result: string;
-    rate: string;
-    timestamp: string;
-}
+// ============================================================================
+// SECTION 4: Type Aliases for Compatibility
+// ============================================================================
 
-export interface ConvertUnitsRequest {
-    amount: number;
-    from_unit: string;
-    to_unit: string;
-    material?: string;
-}
-
-export interface ConvertUnitsResponse {
-    result: number;
-    formatted_result: string;
-    from_unit: string;
-    to_unit: string;
-}
-
-// New types for unit converter registry
-export interface ParseUnitResponse {
-    amount: number;
-    unit: string;
-    category: string;
-}
-
-export interface GetUnitsResponse {
-    units: UnitDTO[];
-}
-
-export interface UnitDTO {
-    id: string;
-    label: string;
-    category: string;
-}
-
-export interface LogRequest {
-    level: string;
-    message: string;
-}
-
-// New types for unified command palette
-// IMPORTANT: Must match Rust's adjacently tagged serialization format
-// Backend uses: #[serde(tag = "type", content = "payload")]
-export type ActionType =
-    // Phase 4: Production-ready - Only structured payload variants
-    | { type: 'Translate'; payload: { target_lang: string; source_lang?: string } }
-    | { type: 'ConvertCurrency'; payload: { target_currency: string } }
-    | { type: 'ConvertTimeAction'; payload: { target_timezone: string } }
-    | { type: 'AnalyzeText'; payload: { action: 'CountWords' | 'CountChars' | 'ReadingTime' } }
-    | { type: 'DefinitionAction'; payload: { action: 'FindSynonyms' | 'FindAntonyms' | 'BriefDefinition' } }
-    | { type: 'ConvertUnit'; payload: { target: string } };
-
-export interface ConvertTimeRequest {
-    time_input: string;
-    target_timezone: string;
-    source_timezone?: string;
-    matched_keyword?: string;  // NEW: Which keyword triggered timezone detection
-}
-
-export interface ConvertTimeResponse {
-    source_time: string;
-    target_time: string;
-    offset_description: string;
-    source_timezone: string;
-    target_timezone: string;
-
-    // Enhanced fields
-    target_utc_offset: string;
-    target_zone_abbr: string;
-    relative_offset: string;
-    date_change_indicator?: string;
-    source_zone_abbr: string;
-    source_utc_offset: string;
-}
-
-export interface TimezoneInfo {
-    label: string;
-    iana_id: string;
-    keywords: string;
-}
-
-export interface ParsedTimeInput {
-    time_input: string;
-    source_timezone?: string;
-    matched_keyword?: string;  // NEW: Which keyword triggered timezone detection
-}
-
-export interface LookupDefinitionRequest {
-    word: string;
-}
-
-export interface LookupDefinitionResponse {
-    word: string;
-    phonetic?: string;
-    definitions: DefinitionEntry[];
-    synonyms: string[];
-    antonyms: string[];
-}
-
-export interface DefinitionEntry {
-    part_of_speech: string;
-    definition: string;
-    example?: string;
-}
-
-export interface TextAnalysisRequest {
-    text: string;
-}
-
-export interface TextAnalysisResponse {
-    word_count: number;
-    char_count: number;
-    char_count_no_spaces: number;
-    grapheme_count: number;
-    line_count: number;
-    reading_time_sec: number;
-}
-
-export type ContextCategory =
-    | "length"
-    | "mass"
-    | "volume"
-    | "temperature"
-    | "speed"
-    | "currency"
-    | "text"
-    | "time"
-    | "general";
-
-export interface CommandItem {
-    id: string;
-    label: string;
-    description?: string;
-    keywords?: string[];  // Hidden keywords for search matching
-    action_type?: ActionType;
-    widget_type?: string;
-    category?: ContextCategory;  // Context category for filtering/boosting
-}
-
-export interface ExecuteActionRequest {
-    action_type: ActionType;
-    params: Record<string, unknown>;
-}
-
-export interface ExecuteActionResponse {
-    result: string;
-    metadata?: Record<string, unknown>;
-}
-
-
-
-export interface ClipboardHistoryItem {
-    id: string;
-    content: string;
-    item_type: "Text" | "Image" | "Html";
-    timestamp: string;
-    preview: string;
-    source_app?: string;
-}
-
-export type ClipboardItem = ClipboardHistoryItem;
+/**
+ * Alias for ClipboardHistoryItem (for backward compatibility)
+ * @deprecated Use ClipboardHistoryItem directly
+ */
+export type ClipboardItem = import('../../types/bindings').ClipboardHistoryItem;

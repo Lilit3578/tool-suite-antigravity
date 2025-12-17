@@ -95,15 +95,16 @@ export function TranslatorWidget() {
             text: debouncedInput,
             target_lang: targetCode,
             source_lang: sourceCode,
+            provider: null, // Added provider field
         })
             .then((response) => {
                 if (currentRequest !== requestIdRef.current) return;
-                if (response.detected) {
+                if (response.detected_source_lang) { // Changed from response.detected to response.detected_source_lang
                     // Only update source language if currently set to Auto (null)
                     // This prevents "fighting" the user if they explicitly selected a language
                     if (sourceLang === null) {
                         const detectedOption = LANGUAGES.find(
-                            (lang) => lang.code.toLowerCase() === response.detected?.toLowerCase()
+                            (lang) => lang.code.toLowerCase() === response.detected_source_lang?.toLowerCase() // Changed from response.detected to response.detected_source_lang
                         );
                         if (detectedOption) {
                             setSourceLang(detectedOption);

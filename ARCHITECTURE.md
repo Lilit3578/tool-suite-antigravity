@@ -13,7 +13,8 @@
 | **Monorepo**       | TurboRepo + npm workspaces                      |
 | **Desktop App**    | Tauri 2.x (Rust backend + React frontend)       |
 | **Web App**        | Next.js 14 (App Router)                         |
-| **Frontend**       | React 19, TypeScript, Tailwind CSS, Radix UI    |
+| **Frontend**       | React 18, TypeScript, Tailwind CSS, Radix UI    |
+| **Design System**  | Shared Tailwind config + globals.css in `@tool-suite/ui` |
 | **State**          | Zustand                                         |
 | **Search**         | Fuse.js (fuzzy matching)                        |
 | **Backend**        | Rust (async-std, Tauri IPC)                     |
@@ -27,28 +28,36 @@
 
 ```mermaid
 graph TB
-    subgraph Monorepo
-        subgraph Desktop
+    subgraph Monorepo["🏗️ Monorepo (TurboRepo)"]
+        subgraph Desktop["🖥️ Desktop App (Tauri)"]
             Vite[Vite Dev Server]
             ReactFE[React Frontend]
             TauriIPC[Tauri IPC Bridge]
             RustBE[Rust Backend]
         end
-        subgraph Web
+        subgraph Web["🌐 Web App (Next.js)"]
             NextJS[Next.js Server]
             AuthJS[Auth.js v5]
             MongoDB[(MongoDB)]
         end
-        subgraph Packages
-            SharedUI[packages/ui]
+        subgraph Packages["📦 Shared Packages"]
+            DesignSystem["@tool-suite/ui<br/>(Design System)"]
             SharedConfig[packages/config]
         end
     end
     
-    ReactFE --> TauriIPC
-    TauriIPC --> RustBE
-    NextJS --> AuthJS
-    AuthJS --> MongoDB
+    ReactFE -->|IPC Commands| TauriIPC
+    TauriIPC -->|Invoke| RustBE
+    NextJS -->|Authentication| AuthJS
+    AuthJS -->|Sessions/Users| MongoDB
+    
+    ReactFE -.->|Import CSS & Config| DesignSystem
+    NextJS -.->|Import CSS & Config| DesignSystem
+    
+    style DesignSystem fill:#0ea5e9,stroke:#0284c7,color:#fff
+    style Desktop fill:#f0f9ff,stroke:#0284c7
+    style Web fill:#f0fdf4,stroke:#16a34a
+    style Packages fill:#fef3c7,stroke:#f59e0b
 ```
 
 ---
@@ -61,7 +70,11 @@ tool-suite-antigravity/
 │   ├── desktop/              # Tauri Desktop Application
 │   └── web/                  # Next.js Web Application
 ├── packages/
-│   ├── ui/                   # Shared UI components (placeholder)
+│   ├── ui/                   # Shared Design System (@tool-suite/ui)
+│   │   ├── src/
+│   │   │   └── globals.css   # Shared global styles, fonts, design tokens
+│   │   ├── tailwind.config.ts # Shared Tailwind configuration
+│   │   └── package.json      # Package exports
 │   └── config/               # Shared configurations (placeholder)
 ├── turbo.json                # TurboRepo task configuration
 └── package.json              # Root workspace configuration
@@ -144,7 +157,14 @@ sequenceDiagram
     participant macOS
     participant Rust as Rust Backend
     participant React as React Frontend
+    participant UI as @tool-suite/ui
     
+    Note over React,UI: App Initialization
+    React->>UI: Import globals.css
+    React->>UI: Load Tailwind config (preset)
+    UI-->>React: Design tokens applied
+    
+    Note over User,React: User Interaction
     User->>macOS: Press Ctrl+Shift+L
     macOS->>Rust: Global shortcut triggered
     Rust->>Rust: Simulate Cmd+C (capture selection)
@@ -153,8 +173,8 @@ sequenceDiagram
     User->>React: Type search / select action
     React->>Rust: invoke("execute_action", request)
     Rust->>Rust: Process via feature module
-    Rust->>React: Return result
-    React->>User: Display result
+    Rust-->>React: Return result
+    React->>User: Display result (styled with design tokens)
 ```
 
 ---
@@ -206,15 +226,24 @@ sequenceDiagram
     participant Auth as Auth.js
     participant DB as MongoDB
     participant Desktop as Desktop App
+    participant UI as @tool-suite/ui
     
-    User->>Web: Enter email
+    Note over Web,UI: Web App Initialization
+    Web->>UI: Import globals.css
+    Web->>UI: Load Tailwind preset
+    UI-->>Web: Design tokens applied
+    
+    Note over User,Desktop: Authentication Flow
+    User->>Web: Enter email (styled form)
     Web->>Auth: signIn("resend", email)
     Auth->>DB: Create/verify user
-    Auth->>User: Send magic link email
+    Auth-->>User: Send magic link email
     User->>Web: Click magic link
     Auth->>DB: Verify token, create session
     Web->>Desktop: Deep link with auth token
     Desktop->>Desktop: Store auth, enable sync
+    
+    Note over Web,Desktop: Both apps use same design system
 ```
 
 ---
@@ -285,6 +314,87 @@ Based on **Radix UI** primitives, styled with **Tailwind CSS**:
 
 ---
 
+## Shared Design System (`packages/ui/`)
+
+### Overview
+
+The `@tool-suite/ui` package serves as the **Single Source of Truth** for design tokens across both desktop and web applications. This ensures visual consistency throughout the monorepo.
+
+### Structure
+
+```
+packages/ui/
+├── src/
+│   ├── globals.css           # Shared global styles
+│   └── index.tsx             # Component exports (placeholder)
+├── tailwind.config.ts        # Shared Tailwind configuration
+└── package.json              # Package configuration
+```
+
+### Design Tokens
+
+#### Fonts
+- **Headings**: Instrument Serif (serif)
+- **Body Text**: Be Vietnam Pro (sans-serif)
+- **Code/Labels**: JetBrains Mono (monospace)
+
+#### Color System
+
+**Ink Variables** (Light/Dark mode adaptive):
+- `--ink-0` through `--ink-1000`: Grayscale palette with opacity variants
+- Used for custom UI elements and command palette
+
+**Shadcn Design System**:
+- `background`, `foreground`, `card`, `popover`, `primary`, `secondary`
+- `muted`, `accent`, `destructive`, `border`, `input`, `ring`
+- 5 chart color variables
+
+#### Typography Classes
+- `.h0`, `.h1`, `.h2`: Instrument Serif headings
+- `.body`, `.small`: Be Vietnam Pro text
+- `.label`: JetBrains Mono uppercase labels
+
+#### Animations
+- `fade-in`: 0.2s ease-in-out opacity
+- `slide-up`: 0.3s ease-out transform + opacity
+
+### Usage
+
+Both apps import the shared configuration:
+
+**Desktop** ([tailwind.config.js](file:///Users/lilitgrigorian/Desktop/tool-suite-antigravity/apps/desktop/tailwind.config.js)):
+```javascript
+import sharedConfig from "@tool-suite/ui/tailwind.config";
+
+export default {
+  presets: [sharedConfig],
+  content: [
+    "./src/**/*.{js,ts,jsx,tsx}",
+    "../../packages/ui/src/**/*.{ts,tsx}",
+  ],
+};
+```
+
+**Web** ([tailwind.config.ts](file:///Users/lilitgrigorian/Desktop/tool-suite-antigravity/apps/web/tailwind.config.ts)):
+```typescript
+import sharedConfig from "@tool-suite/ui/tailwind.config";
+
+const config: Config = {
+  presets: [sharedConfig],
+  content: [
+    "./app/**/*.{js,ts,jsx,tsx}",
+    "../../packages/ui/src/**/*.{ts,tsx}",
+  ],
+};
+```
+
+Both apps import shared CSS in their root layouts:
+```typescript
+import "@tool-suite/ui/globals.css";
+```
+
+---
+
 ## Configuration Files
 
 | File | Purpose |
@@ -292,7 +402,9 @@ Based on **Radix UI** primitives, styled with **Tailwind CSS**:
 | `turbo.json` | TurboRepo task definitions (build, dev, lint) |
 | `tauri.conf.json` | Tauri app config (windows, plugins, bundle) |
 | `vite.config.ts` | Vite bundler configuration |
-| `tailwind.config.js` | Tailwind CSS theme |
+| `packages/ui/tailwind.config.ts` | **Shared** Tailwind theme (Single Source of Truth) |
+| `apps/desktop/tailwind.config.js` | Desktop-specific content paths + preset |
+| `apps/web/tailwind.config.ts` | Web-specific content paths + preset |
 | `tsconfig.json` | TypeScript configuration |
 
 ---
@@ -315,10 +427,42 @@ The Productivity Widgets application is a sophisticated monorepo combining:
 
 1. **Desktop App**: A Tauri-based native macOS app with a React frontend and Rust backend, providing instant-access productivity tools via global shortcuts
 2. **Web App**: A Next.js companion for user management, authentication, and device sync
-3. **Shared Packages**: Placeholder for future shared UI components and configurations
+3. **Shared Design System**: Centralized design tokens in `@tool-suite/ui` ensuring visual consistency across all applications
 
 The architecture prioritizes:
 - **Performance**: Native Rust backend for computations
 - **Responsiveness**: Global shortcuts and floating windows
 - **Type Safety**: Full TypeScript + Rust type definitions
 - **Extensibility**: Modular feature system (easy to add new widgets)
+- **Design Consistency**: Single Source of Truth for design tokens via shared Tailwind config and global CSS
+
+---
+
+## Recent Changes
+
+### Design System Centralization (December 2025)
+
+**Objective**: Establish `packages/ui` as the Single Source of Truth for design tokens.
+
+**Changes Made**:
+1. Created `@tool-suite/ui` package with shared Tailwind configuration and global CSS
+2. Migrated Desktop's sophisticated design system (fonts, colors, animations) to shared package
+3. Refactored both Desktop and Web apps to use Tailwind presets from shared config
+4. Removed Desktop-specific CSS that was incompatible with Next.js (opacity/overflow rules)
+5. Updated Web app to inherit Desktop's design (Instrument Serif, Be Vietnam Pro, ink-based colors)
+
+**Benefits**:
+- ✅ Visual consistency across Desktop and Web applications
+- ✅ Single source of truth for design tokens
+- ✅ Easier maintenance and updates to design system
+- ✅ Reduced code duplication
+
+**Files Modified**:
+- `packages/ui/tailwind.config.ts` (new)
+- `packages/ui/src/globals.css` (new)
+- `packages/ui/package.json` (updated with exports)
+- `apps/desktop/tailwind.config.js` (simplified to use preset)
+- `apps/desktop/src/main.tsx` (imports shared CSS)
+- `apps/web/tailwind.config.ts` (uses shared preset)
+- `apps/web/app/layout.tsx` (imports shared CSS, removed Geist fonts)
+- `apps/web/app/globals.css` (deleted - replaced by shared CSS)
